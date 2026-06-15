@@ -23,6 +23,30 @@
       color: rgba(255,255,255,0.7); font-size: 13px; letter-spacing: 0.08em;
       text-transform: uppercase; pointer-events: none;
     }
+    #walk-overlay {
+      display: none; position: fixed; inset: 0;
+      align-items: center; justify-content: center; flex-direction: column; gap: 12px;
+      background: rgba(0,0,0,0.45);
+    }
+    #walk-overlay.visible { display: flex; }
+    #walk-overlay p { color: #fff; font-size: 15px; letter-spacing: 0.06em; text-align: center; line-height: 1.8; }
+    #crosshair {
+      display: none; position: fixed;
+      top: 50%; left: 50%; transform: translate(-50%,-50%);
+      width: 20px; height: 20px; pointer-events: none;
+    }
+    #crosshair::before, #crosshair::after {
+      content:''; position: absolute; background: rgba(255,255,255,0.75);
+    }
+    #crosshair::before { width: 2px; height: 100%; left: 50%; transform: translateX(-50%); }
+    #crosshair::after  { width: 100%; height: 2px; top: 50%; transform: translateY(-50%); }
+    #crosshair.visible { display: block; }
+    #walk-hint {
+      display: none; position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%);
+      color: rgba(255,255,255,0.55); font-size: 12px; letter-spacing: 0.05em;
+      pointer-events: none; text-align: center;
+    }
+    #walk-hint.visible { display: block; }
   </style>
 </head>
 <body>
@@ -33,7 +57,14 @@
     <button onclick="goMiddle()">Hillfort</button>
     <button onclick="goLower()">Underworld</button>
     <button onclick="goAll()">All three</button>
+    <button onclick="enterWalk()" id="walkBtn">Walk inside</button>
   </div>
+  <div id="walk-overlay">
+    <p>WASD — move &nbsp;·&nbsp; Mouse — look<br>Click to start &nbsp;·&nbsp; Esc to exit</p>
+    <button onclick="requestLock()">Click to enter</button>
+  </div>
+  <div id="crosshair"></div>
+  <div id="walk-hint">WASD to move &nbsp;·&nbsp; Esc to exit walk mode</div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script>
@@ -57,6 +88,7 @@
 
     var cam = new THREE.PerspectiveCamera(50, W/H, 0.1, 300);
     var th=0.9, ph=1.05, rd=62, tTh=0.9, tPh=1.05, tRd=62;
+    var lookY=5, tLookY=5;
 
     function updCam() {
       cam.position.set(
@@ -64,14 +96,14 @@
         rd*Math.cos(ph),
         rd*Math.sin(ph)*Math.cos(th)
       );
-      cam.lookAt(0, 5, 0);
+      cam.lookAt(0, lookY, 0);
     }
     updCam();
 
-    window.goAll    = function(){ tTh=0.9;  tPh=1.05; tRd=62; };
-    window.goUpper  = function(){ tTh=0.7;  tPh=0.6;  tRd=40; };
-    window.goMiddle = function(){ tTh=0.85; tPh=0.88; tRd=26; };
-    window.goLower  = function(){ tTh=0.5;  tPh=1.35; tRd=30; };
+    window.goAll    = function(){ tTh=0.9;  tPh=1.05; tRd=62; tLookY=5;   };
+    window.goUpper  = function(){ tTh=0.7;  tPh=0.6;  tRd=40; tLookY=24;  };
+    window.goMiddle = function(){ tTh=0.85; tPh=0.88; tRd=26; tLookY=3;   };
+    window.goLower  = function(){ tTh=0.5;  tPh=1.35; tRd=30; tLookY=-14; };
 
     window.addEventListener('resize', function(){
       W = window.innerWidth; H = window.innerHeight;
@@ -141,17 +173,62 @@
       h2.rotation.x=-Math.PI/2; h2.position.set(p[0],UW+0.09,p[1]); scene.add(h2);
     });
 
-    var rootC = [0x2a1208,0x180a06,0x241006,0x160804,0x2c1408,0x120602,0x201008,0x100604];
-    for (var i=0; i<8; i++) {
-      var ra=i/8*Math.PI*2, rsp=3.2+Math.sin(i*1.3)*1.4, rh=9+(i%4)*1.2;
-      var rm = new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.22,rh,5,1), fmf(rootC[i]));
-      rm.position.set(Math.cos(ra)*rsp, UW+rh/2, Math.sin(ra)*rsp);
-      rm.rotation.z=Math.cos(ra)*0.4; rm.rotation.x=Math.sin(ra)*0.35; rm.castShadow=true; scene.add(rm);
+    // Roots — sweeping ribbon curves from trunk down to water
+    var ribbonCols=[0x3a4acc,0x2a6aaa,0x1a88aa,0x4a3aaa,0x226688,0x5a3a99,0x1a7799,0x3355bb,0x2a5599,0x446688];
+    function makeRibbon(pts, col, w) {
+      var curve=new THREE.CatmullRomCurve3(pts);
+      var geo=new THREE.TubeGeometry(curve,40,w,3,false);
+      var mat=new THREE.MeshPhongMaterial({color:col,flatShading:false,shininess:60,side:THREE.DoubleSide});
+      var mesh=new THREE.Mesh(geo,mat);
+      mesh.castShadow=true; scene.add(mesh);
     }
-    for (var i=0; i<8; i++) {
-      var da=i/8*Math.PI*2, dr=5+(i%3)*2;
-      var dot = new THREE.Mesh(new THREE.SphereGeometry(0.2,4,4), bm(i%2===0?0x00eebb:0x3366ff));
-      dot.position.set(Math.cos(da)*dr, UW+0.9+(i%3), Math.sin(da)*dr); scene.add(dot);
+
+    // Sweeping ribbons — more of them, wider spread, organic curves
+    // [startAngle, mid1Angle, mid2Angle, endRadius, mid1R, mid1Y, mid2Y, width]
+    var sy=-4, ey=UW+0.4;
+    var ribbonDefs=[
+      [0.0,   0.9,   0.3,  17, 6,  -8,  -13, 1.0],
+      [0.5,  -0.3,   0.6,  15, 7,  -9,  -14, 0.8],
+      [1.05,  1.8,   1.2,  18, 5,  -7,  -12, 1.1],
+      [1.57,  0.8,   1.7,  16, 8,  -10, -15, 0.9],
+      [2.1,   2.9,   2.2,  14, 6,  -8,  -13, 1.0],
+      [2.6,   1.7,   2.7,  17, 5,  -9,  -14, 0.8],
+      [3.14,  3.9,   3.0,  16, 7,  -7,  -12, 1.2],
+      [3.67,  4.5,   3.5,  15, 9,  -10, -15, 0.9],
+      [4.19,  3.3,   4.3,  18, 6,  -8,  -13, 1.0],
+      [4.71,  5.5,   4.6,  14, 7,  -9,  -14, 0.8],
+      [5.24,  4.4,   5.1,  17, 5,  -7,  -12, 1.1],
+      [5.76,  6.4,   5.6,  16, 8,  -10, -15, 0.9],
+      [0.3,   1.2,   0.1,  13, 9,  -8,  -14, 0.7],
+      [1.8,   1.0,   2.1,  15, 6,  -9,  -13, 0.7],
+      [3.3,   4.1,   3.0,  14, 7,  -7,  -12, 0.7],
+      [4.8,   5.8,   4.5,  16, 5,  -10, -15, 0.7]
+    ];
+    ribbonDefs.forEach(function(d,i){
+      var sa=d[0],m1a=d[1],m2a=d[2],endR=d[3],m1r=d[4],m1y=d[5],m2y=d[6],w=d[7];
+      makeRibbon([
+        new THREE.Vector3(Math.cos(sa)*0.5,    sy,   Math.sin(sa)*0.5),
+        new THREE.Vector3(Math.cos(m1a)*m1r,   m1y,  Math.sin(m1a)*m1r),
+        new THREE.Vector3(Math.cos(m2a)*endR*0.72, m2y, Math.sin(m2a)*endR*0.72),
+        new THREE.Vector3(Math.cos(sa)*endR,   ey,   Math.sin(sa)*endR)
+      ], ribbonCols[i%ribbonCols.length], w);
+    });
+
+    // Stars in the underworld void
+    var uwSp=[];
+    for (var i=0; i<300; i++) {
+      var ut=Math.random()*Math.PI*2, ur=12+Math.random()*28, uy=UW+Math.random()*16;
+      uwSp.push(ur*Math.cos(ut), uy, ur*Math.sin(ut));
+    }
+    var uwSg=new THREE.BufferGeometry();
+    uwSg.setAttribute('position',new THREE.Float32BufferAttribute(uwSp,3));
+    scene.add(new THREE.Points(uwSg,new THREE.PointsMaterial({color:0xffffff,size:0.12})));
+
+    // Bioluminescent tips at water level
+    for (var i=0; i<10; i++) {
+      var da=i/10*Math.PI*2, dr=7+(i%4)*1.2;
+      var dot=new THREE.Mesh(new THREE.SphereGeometry(0.2,5,5),bm(i%2===0?0x00eebb:0x4477ff));
+      dot.position.set(Math.cos(da)*dr, UW+0.5, Math.sin(da)*dr); scene.add(dot);
     }
     for (var i=0; i<12; i++) {
       var sa=i/12*Math.PI*2, sr=6+(i%4)*1.6, ssw=0.7+(i%3)*0.4, ssh=0.5+(i%4)*0.4;
@@ -205,14 +282,30 @@
     var garch = new THREE.Mesh(new THREE.BoxGeometry(0.8,1.0,0.4), fmf(0x221005));
     garch.position.set(0,gty+0.5,5.18); scene.add(garch);
 
-    for (var i=0; i<14; i++) {
-      var ra2=-0.25+i/13*1.0;
-      var rp = new THREE.Mesh(new THREE.BoxGeometry(1.0,0.15,0.7), fmf(0x8a6030));
-      rp.position.set(Math.sin(ra2)*7.8, MW+0.05+i/13*4.4, Math.cos(ra2)*7.8);
-      rp.rotation.y=-ra2; scene.add(rp);
+    // Stairs — wide flat steps going from outer ground up the mound face
+    var STEPS = 18;
+    for (var i=0; i<STEPS; i++) {
+      var t2 = i/(STEPS-1);
+      // angle sweeps slightly around the mound face
+      var sa3 = 0.0 + t2*0.55;
+      // radius goes from outer base inward as we climb
+      var sr3 = 9.0 - t2*2.8;
+      var stepY = MW + t2*4.5;
+      var stepW = 2.0 - t2*0.5;   // steps get slightly narrower near top
+      var rp = new THREE.Mesh(new THREE.BoxGeometry(stepW, 0.22, 0.75), fmf(i%2===0?0x9a6a38:0x8a5a28));
+      rp.position.set(Math.sin(sa3)*sr3, stepY, Math.cos(sa3)*sr3);
+      rp.rotation.y = -sa3;
+      rp.castShadow = true; scene.add(rp);
+      // small riser face between steps
+      if (i < STEPS-1) {
+        var rh3 = 4.5/STEPS;
+        var riser = new THREE.Mesh(new THREE.BoxGeometry(stepW, rh3, 0.18), fmf(0x7a4a20));
+        riser.position.set(Math.sin(sa3)*sr3, stepY+rh3/2, Math.cos(sa3)*sr3 - 0.45);
+        riser.rotation.y = -sa3; scene.add(riser);
+      }
     }
 
-    [[0,0],[2.2,1.5],[-2.0,-1.2],[0.4,-2.8]].forEach(function(h){
+    [[-2.5,0],[2.2,1.5],[-2.0,-1.2],[0.4,-2.8]].forEach(function(h){
       var lw = new THREE.Mesh(new THREE.BoxGeometry(3.2,1.3,1.5), fmf(0xf0ddb0));
       lw.position.set(h[0],MW+4.5+0.65,h[1]); lw.castShadow=true; lw.receiveShadow=true; scene.add(lw);
       var lr = new THREE.Mesh(new THREE.CylinderGeometry(0.05,1.7,1.0,4,1), fmf(0xcc4a18));
@@ -245,60 +338,218 @@
       rseg.position.set(13-i*1.5, MW+0.04, -12+i*2.5); scene.add(rseg);
     }
 
-    // ── UPPER WORLD ─────────────────────────────────────
+    // ── UPPER WORLD — TREE CROWN ─────────────────────────
     var SW = 18;
-    [[18,1.5,0xf0e0c0],[15,1.2,0xfaeed0],[12,1.0,0xfffae8]].forEach(function(d,i){
-      var layer = new THREE.Mesh(new THREE.CylinderGeometry(d[0]-i*2,d[0]-i*2+2,d[1],12,1), fmf(d[2]));
-      layer.position.y = SW-0.8-i*0.6; scene.add(layer);
-    });
-    var skyTop = new THREE.Mesh(new THREE.CircleGeometry(12,12), fmf(0xfffcf0));
-    skyTop.rotation.x=-Math.PI/2; skyTop.position.y=SW+0.01; scene.add(skyTop);
-    var grMat = bm(0xffd700, 0.4);
-    var goldRingM = new THREE.Mesh(new THREE.CircleGeometry(4.5,10), grMat);
-    goldRingM.rotation.x=-Math.PI/2; goldRingM.position.y=SW+0.03; scene.add(goldRingM);
 
-    [[0,0,0,10],[0,0,8,4],[0,0,-7,4],[0,0,-4,-8]].forEach(function(p){
-      var dx=p[2]-p[0], dz=p[3]-p[1], len=Math.sqrt(dx*dx+dz*dz);
-      var pm = new THREE.Mesh(new THREE.PlaneGeometry(0.6,len), fmf(0xffd060));
-      pm.rotation.x=-Math.PI/2; pm.rotation.z=Math.atan2(dx,dz);
-      pm.position.set((p[0]+p[2])/2, SW+0.04, (p[1]+p[3])/2); scene.add(pm);
+    // The trunk continues up into the crown
+    var upperTrunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.28,6,8,1), fmf(0x1a3828));
+    upperTrunk.position.y = SW+3; scene.add(upperTrunk);
+
+    // Main branch arms spreading out from trunk top
+    var branchCols = [0x1e4a2a,0x2a5a30,0x163820,0x224030];
+    var branches = [
+      [0, SW+5, 0,  7, SW+7,  4,  0.18, 0.28],
+      [0, SW+5, 0, -6, SW+7,  3,  0.18, 0.28],
+      [0, SW+5, 0,  4, SW+7, -6,  0.15, 0.24],
+      [0, SW+5, 0, -3, SW+6, -7,  0.15, 0.24],
+      [0, SW+5, 0,  8, SW+6, -1,  0.12, 0.20],
+      [0, SW+5, 0, -7, SW+6, -3,  0.12, 0.20],
+      [0, SW+5, 0,  1, SW+6,  8,  0.12, 0.20],
+      [0, SW+5, 0, -2, SW+6, -8,  0.10, 0.18]
+    ];
+    branches.forEach(function(b,i){
+      var dx=b[3]-b[0],dy=b[4]-b[1],dz=b[5]-b[2];
+      var len=Math.sqrt(dx*dx+dy*dy+dz*dz);
+      var br=new THREE.Mesh(new THREE.CylinderGeometry(b[6],b[7],len,6,1),fmf(branchCols[i%4]));
+      br.position.set((b[0]+b[3])/2,(b[1]+b[4])/2,(b[2]+b[5])/2);
+      var dir=new THREE.Vector3(dx,dy,dz).normalize();
+      br.setRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),dir));
+      br.castShadow=true; scene.add(br);
     });
 
-    [[4,4,0.3],[-4,4,2.7],[5,-3,1.0],[-3,-5,0.5],[2.5,8,1.8],[-6,2,0.8],[7,-2,2.2]].forEach(function(h,i){
-      var sw2 = new THREE.Mesh(new THREE.BoxGeometry(1.8,2.0,1.4), fmf(i%2===0?0xf8f4e8:0xfffacc));
-      sw2.position.set(h[0],SW+1.0,h[1]); sw2.rotation.y=h[2]; sw2.castShadow=true; scene.add(sw2);
-      var sr2 = new THREE.Mesh(new THREE.ConeGeometry(1.4,1.2,4,1), fmf(i%2===0?0xffd700:0xffe84a));
-      sr2.position.set(h[0],SW+2.4,h[1]); sr2.rotation.y=h[2]+Math.PI/4; scene.add(sr2);
-    });
-
-    var cc = [0xffffff,0xffd700,0xfff8c0,0xffe040,0xf8f8f8];
-    [[0,SW+10,0,4.5],[3,SW+9,0,3.5],[-3,SW+9,0,3.5],[0,SW+9,3,3.5],[0,SW+9,-3,3.5],
-     [2.5,SW+8,2.5,3.0],[-2.5,SW+8,2.5,3.0],[-2.5,SW+8,-2.5,3.0],[2.5,SW+8,-2.5,3.0]
-    ].forEach(function(b,i){
-      var s = new THREE.Mesh(new THREE.SphereGeometry(b[3],5,4), fmf(cc[i%5]));
+    // Foliage — dense cluster of gold/white/cream spheres forming the canopy mass
+    var leafCols=[0xffd700,0xffe860,0xfff8c0,0xffec40,0xfffaaa,0xffd040,0xffeebb,0xffc820];
+    var canopyDef=[
+      // [x, y, z, radius]  — a wide spread of overlapping spheres
+      [0,   SW+10, 0,   5.0],
+      [5,   SW+9,  3,   4.0], [-5,  SW+9,  3,   3.8],
+      [4,   SW+9, -5,   3.8], [-4,  SW+9, -5,   3.6],
+      [7,   SW+8,  0,   3.2], [-7,  SW+8,  0,   3.2],
+      [0,   SW+8,  7,   3.2], [0,   SW+8, -7,   3.0],
+      [9,   SW+7,  4,   2.8], [-9,  SW+7,  4,   2.6],
+      [6,   SW+7, -7,   2.8], [-6,  SW+7, -7,   2.6],
+      [3,   SW+12, 2,   3.5], [-3,  SW+12,-2,   3.2],
+      [10,  SW+7,  0,   2.2], [-10, SW+7,  0,   2.2],
+      [0,   SW+7,  10,  2.2], [0,   SW+7, -10,  2.0],
+      [2,   SW+8,  0,   2.5], [-2,  SW+8,  0,   2.5]
+    ];
+    canopyDef.forEach(function(b,i){
+      var s=new THREE.Mesh(new THREE.SphereGeometry(b[3],6,5),fmf(leafCols[i%8]));
       s.position.set(b[0],b[1],b[2]); s.castShadow=true; scene.add(s);
     });
 
-    var sp = [];
-    for (var i=0; i<160; i++) {
-      var st=Math.random()*Math.PI*2, sph2=Math.random()*Math.PI*0.5, sr4=48+Math.random()*10;
-      sp.push(sr4*Math.sin(sph2)*Math.cos(st), sr4*Math.cos(sph2)+20, sr4*Math.sin(sph2)*Math.sin(st));
-    }
-    var sg = new THREE.BufferGeometry();
-    sg.setAttribute('position', new THREE.Float32BufferAttribute(sp,3));
-    scene.add(new THREE.Points(sg, new THREE.PointsMaterial({color:0xffd700, size:0.3})));
+    // Houses nestled IN the canopy — sitting on branch forks
+    var housePositions=[
+      [6,  SW+8,  3,  0.4],
+      [-5, SW+8,  4,  2.0],
+      [4,  SW+8, -5,  1.2],
+      [-4, SW+7, -4,  3.5],
+      [8,  SW+7,  0,  0.8],
+      [-7, SW+7, -2,  2.6],
+      [1,  SW+9,  7,  1.5]
+    ];
+    housePositions.forEach(function(h,i){
+      var hw=new THREE.Mesh(new THREE.BoxGeometry(1.4,1.6,1.1),fmf(i%2===0?0xf8f4e8:0xfffacc));
+      hw.position.set(h[0],h[1],h[2]); hw.rotation.y=h[3]; hw.castShadow=true; scene.add(hw);
+      var hr=new THREE.Mesh(new THREE.ConeGeometry(1.1,1.0,4,1),fmf(i%2===0?0xffd700:0xffe84a));
+      hr.position.set(h[0],h[1]+1.3,h[2]); hr.rotation.y=h[3]+Math.PI/4; scene.add(hr);
+    });
 
-    // ── CONTROLS ────────────────────────────────────────
+    // Gold glowing ring on trunk entry into canopy
+    var grMat = bm(0xffd700, 0.5);
+    var goldRingM = new THREE.Mesh(new THREE.TorusGeometry(1.0,0.15,6,24), grMat);
+    goldRingM.rotation.x=Math.PI/2; goldRingM.position.y=SW+5.2; scene.add(goldRingM);
+
+    // Clouds around the canopy
+    function makeCloud(cx,cy,cz,scale) {
+      [[0,0,0,1.8],[1.6,0.3,0,1.4],[-1.5,0.2,0,1.3],[0.6,0.8,0,1.2],[-0.5,0.6,1.2,1.1],[0.4,0.5,-1.3,1.1]].forEach(function(b){
+        var sp=new THREE.Mesh(new THREE.SphereGeometry(b[3]*scale,6,5),fmf(0xffffff));
+        sp.position.set(cx+b[0]*scale,cy+b[1]*scale,cz+b[2]*scale); scene.add(sp);
+      });
+    }
+    makeCloud(-18, SW+4,  2,  1.6);
+    makeCloud( 19, SW+3, -3,  1.5);
+    makeCloud(-15, SW+5,  14, 1.3);
+    makeCloud( 16, SW+4,  12, 1.4);
+    makeCloud( -8, SW+2, -16, 1.2);
+    makeCloud(  7, SW+6, -16, 1.3);
+    makeCloud(-20, SW+3, -8,  1.1);
+    makeCloud( 20, SW+3,  8,  1.2);
+
+    // Gold star particles above
+    var sp=[];
+    for (var i=0; i<160; i++) {
+      var st=Math.random()*Math.PI*2,sph2=Math.random()*Math.PI*0.5,sr4=48+Math.random()*10;
+      sp.push(sr4*Math.sin(sph2)*Math.cos(st),sr4*Math.cos(sph2)+20,sr4*Math.sin(sph2)*Math.sin(st));
+    }
+    var sg=new THREE.BufferGeometry();
+    sg.setAttribute('position',new THREE.Float32BufferAttribute(sp,3));
+    scene.add(new THREE.Points(sg,new THREE.PointsMaterial({color:0xffd700,size:0.3})));
+
+    // ── WALK MODE ───────────────────────────────────────
+    var walkMode = false;
+    var walkYaw = 0, walkPitch = 0;
+    var walkPos = new THREE.Vector3(0, MW+6.2, 9);
+    var keys = {};
+    var walkOverlay = document.getElementById('walk-overlay');
+    var crosshair   = document.getElementById('crosshair');
+    var walkHint    = document.getElementById('walk-hint');
+    var walkBtn     = document.getElementById('walkBtn');
+    var uiEl        = document.getElementById('ui');
+    var labelEl     = document.getElementById('label');
+
+    window.enterWalk = function() {
+      goMiddle();
+      setTimeout(function(){
+        walkPos.set(2, MW+6.2, 10);
+        walkYaw = Math.PI; walkPitch = 0;
+        walkOverlay.classList.add('visible');
+      }, 700);
+    };
+
+    window.requestLock = function() {
+      rend.domElement.requestPointerLock();
+    };
+
+    function startWalk() {
+      walkMode = true;
+      walkOverlay.classList.remove('visible');
+      crosshair.classList.add('visible');
+      walkHint.classList.add('visible');
+      walkBtn.textContent = 'Exit walk';
+      walkBtn.onclick = exitWalk;
+      uiEl.style.opacity = '0.3';
+      labelEl.style.display = 'none';
+    }
+
+    window.exitWalk = function() {
+      document.exitPointerLock();
+      walkMode = false;
+      crosshair.classList.remove('visible');
+      walkHint.classList.remove('visible');
+      walkBtn.textContent = 'Walk inside';
+      walkBtn.onclick = enterWalk;
+      uiEl.style.opacity = '1';
+      labelEl.style.display = '';
+      goMiddle();
+    };
+
+    document.addEventListener('pointerlockchange', function(){
+      if (document.pointerLockElement === rend.domElement) {
+        startWalk();
+      } else if (walkMode) {
+        exitWalk();
+      }
+    });
+
+    window.addEventListener('keydown', function(e){ keys[e.code]=true;
+      if (e.code==='Escape' && walkMode) exitWalk();
+    });
+    window.addEventListener('keyup',   function(e){ keys[e.code]=false; });
+
+    window.addEventListener('mousemove', function(e){
+      if (!walkMode) return;
+      walkYaw   -= e.movementX * 0.002;
+      walkPitch  = Math.max(-0.9, Math.min(0.9, walkPitch - e.movementY*0.002));
+    });
+
+    function updateWalk() {
+      if (!walkMode) return;
+      var speed = 0.06;
+      var dir = new THREE.Vector3(Math.sin(walkYaw), 0, Math.cos(walkYaw));
+      var right = new THREE.Vector3(Math.cos(walkYaw), 0, -Math.sin(walkYaw));
+      if (keys['KeyW']||keys['ArrowUp'])    walkPos.addScaledVector(dir,   speed);
+      if (keys['KeyS']||keys['ArrowDown'])  walkPos.addScaledVector(dir,  -speed);
+      if (keys['KeyA']||keys['ArrowLeft'])  walkPos.addScaledVector(right, -speed);
+      if (keys['KeyD']||keys['ArrowRight']) walkPos.addScaledVector(right,  speed);
+      // clamp to island boundary
+      var flatDist = Math.sqrt(walkPos.x*walkPos.x + walkPos.z*walkPos.z);
+      if (flatDist > 13) { walkPos.x *= 13/flatDist; walkPos.z *= 13/flatDist; flatDist = 13; }
+
+      // ground height follows mound cone: base r=9 y=0, top r=6 y=4.5, plateau inside r=6
+      var groundY;
+      if (flatDist <= 6.0) {
+        groundY = MW + 4.5;
+      } else if (flatDist >= 9.2) {
+        groundY = MW;
+      } else {
+        groundY = MW + 4.5 * (9.2 - flatDist) / (9.2 - 6.0);
+      }
+      walkPos.y = groundY + 0.5;
+      cam.position.copy(walkPos);
+      var lookAt = new THREE.Vector3(
+        walkPos.x + Math.sin(walkYaw)*Math.cos(walkPitch),
+        walkPos.y + Math.sin(walkPitch),
+        walkPos.z + Math.cos(walkYaw)*Math.cos(walkPitch)
+      );
+      cam.lookAt(lookAt);
+    }
+
+    // ── ORBIT CONTROLS ──────────────────────────────────
     var drag=false, px=0, py=0;
-    rend.domElement.addEventListener('mousedown', function(e){ drag=true; px=e.clientX; py=e.clientY; });
+    rend.domElement.addEventListener('mousedown', function(e){
+      if (walkMode) return;
+      drag=true; px=e.clientX; py=e.clientY;
+    });
     window.addEventListener('mouseup', function(){ drag=false; });
     window.addEventListener('mousemove', function(e){
-      if (!drag) return;
+      if (walkMode || !drag) return;
       th -= (e.clientX-px)*0.008; px=e.clientX;
       ph = Math.max(0.15, Math.min(1.45, ph+(e.clientY-py)*0.008)); py=e.clientY;
       tTh=th; tPh=ph; updCam();
     });
     rend.domElement.addEventListener('wheel', function(e){
+      if (walkMode) return;
       tRd = Math.max(8, Math.min(90, tRd+e.deltaY*0.06));
     }, {passive:true});
 
@@ -306,6 +557,7 @@
     var lastTouch = null;
     rend.domElement.addEventListener('touchstart', function(e){ lastTouch=e.touches[0]; });
     rend.domElement.addEventListener('touchmove', function(e){
+      if (walkMode) return;
       e.preventDefault();
       var t2=e.touches[0];
       th -= (t2.clientX-lastTouch.clientX)*0.008;
@@ -317,8 +569,12 @@
     var t = 0;
     (function loop(){
       requestAnimationFrame(loop); t+=0.008;
-      th+=(tTh-th)*0.06; ph+=(tPh-ph)*0.06; rd+=(tRd-rd)*0.06;
-      updCam();
+      if (walkMode) {
+        updateWalk();
+      } else {
+        th+=(tTh-th)*0.06; ph+=(tPh-ph)*0.06; rd+=(tRd-rd)*0.06; lookY+=(tLookY-lookY)*0.06;
+        updCam();
+      }
       skyL.intensity   = 1.6 + 0.4*Math.sin(t*0.8);
       grMat.opacity    = 0.3 + 0.1*Math.sin(t*0.6);
       fireL.intensity  = 4.0 + 1.2*Math.sin(t*1.3);
