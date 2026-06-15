@@ -229,22 +229,17 @@
     // ── TRUNK (world tree / oak) ─────────────────────────
     var barkDark = 0x3a2810, barkMid = 0x4a3418, barkLight = 0x5a4020;
 
-    // root flare at base — wide cone suggesting exposed roots
-    var rootFlare = new THREE.Mesh(new THREE.CylinderGeometry(0.65,1.6,2.0,8,1), fmf(0x2e2010));
-    rootFlare.position.y=-17; rootFlare.castShadow=true; scene.add(rootFlare);
+    // main trunk — starts just above underworld, only visible from MW upward
+    // segment: y=-4 to y=4 (the section between underworld and hillfort)
+    var midTrunk = new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.55,8,7,1), fmf(barkMid));
+    midTrunk.position.y = 0; midTrunk.castShadow=true; scene.add(midTrunk);
+    tag(midTrunk, loreData.tree.world, loreData.tree.title, loreData.tree.text);
 
-    // main trunk — oak-brown, slightly wider than before
-    [[0.55,0.75,7,barkDark,-17],[0.42,0.55,11,barkMid,-7.5]].forEach(function(s,si){
-      var m = new THREE.Mesh(new THREE.CylinderGeometry(s[0],s[1],s[2],7,1), fmf(s[3]));
-      m.position.y = s[4]+s[2]/2; m.castShadow=true; scene.add(m);
-      if (si===1) tag(m, loreData.tree.world, loreData.tree.title, loreData.tree.text);
-    });
-
-    // gnarled sub-trunks alongside main — give an ancient twisted look
-    [[ 0.18, 0.0,  0.12, 14, -10],
-     [-0.14, 0.0, -0.10, 12,  -9],
-     [ 0.0,  0.10, 0.0,  10, -11]].forEach(function(g){
-      var gt=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.20,g[3],6,1),fmf(barkDark));
+    // gnarled sub-trunks — only above ground, start at y=-3
+    [[ 0.18, 0.0,  0.12, 7, -3],
+     [-0.14, 0.0, -0.10, 6, -3],
+     [ 0.0,  0.10, 0.0,  5, -3]].forEach(function(g){
+      var gt=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.18,g[3],6,1),fmf(barkDark));
       gt.position.set(g[0],g[4]+g[3]/2,g[2]); gt.rotation.z=g[1]*0.3; gt.castShadow=true; scene.add(gt);
     });
 
@@ -399,45 +394,88 @@
     var aura=new THREE.Mesh(new THREE.SphereGeometry(0.5,8,6),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.08,depthWrite:false,blending:THREE.AdditiveBlending}));
     aura.position.set(soulX,UW+1.5,soulZ); scene.add(aura);
 
-    // Roots — sweeping ribbon curves from trunk down to water
-    var ribbonCols=[0x333333,0x444444,0x2a2a2a,0x3d3d3d,0x222222,0x555555,0x2f2f2f,0x383838,0x1e1e1e,0x424242];
-    function makeRibbon(pts, col, w) {
-      var curve=new THREE.CatmullRomCurve3(pts);
-      var geo=new THREE.TubeGeometry(curve,40,w,3,false);
-      var mat=new THREE.MeshPhongMaterial({color:col,flatShading:false,shininess:60,side:THREE.DoubleSide});
-      var mesh=new THREE.Mesh(geo,mat);
-      mesh.castShadow=true; scene.add(mesh);
-    }
-
-    // Sweeping ribbons — more of them, wider spread, organic curves
-    // [startAngle, mid1Angle, mid2Angle, endRadius, mid1R, mid1Y, mid2Y, width]
-    var sy=-4, ey=UW+0.4;
-    var ribbonDefs=[
-      [0.0,   0.9,   0.3,  17, 6,  -8,  -13, 1.0],
-      [0.5,  -0.3,   0.6,  15, 7,  -9,  -14, 0.8],
-      [1.05,  1.8,   1.2,  18, 5,  -7,  -12, 1.1],
-      [1.57,  0.8,   1.7,  16, 8,  -10, -15, 0.9],
-      [2.1,   2.9,   2.2,  14, 6,  -8,  -13, 1.0],
-      [2.6,   1.7,   2.7,  17, 5,  -9,  -14, 0.8],
-      [3.14,  3.9,   3.0,  16, 7,  -7,  -12, 1.2],
-      [3.67,  4.5,   3.5,  15, 9,  -10, -15, 0.9],
-      [4.19,  3.3,   4.3,  18, 6,  -8,  -13, 1.0],
-      [4.71,  5.5,   4.6,  14, 7,  -9,  -14, 0.8],
-      [5.24,  4.4,   5.1,  17, 5,  -7,  -12, 1.1],
-      [5.76,  6.4,   5.6,  16, 8,  -10, -15, 0.9],
-      [0.3,   1.2,   0.1,  13, 9,  -8,  -14, 0.7],
-      [1.8,   1.0,   2.1,  15, 6,  -9,  -13, 0.7],
-      [3.3,   4.1,   3.0,  14, 7,  -7,  -12, 0.7],
-      [4.8,   5.8,   4.5,  16, 5,  -10, -15, 0.7]
+    // ROOTS — Monument Valley style: flat rectangular beams, sharp 90-degree turns
+    var rootMats=[
+      new THREE.MeshPhongMaterial({color:0x2a2a2a,flatShading:true}),
+      new THREE.MeshPhongMaterial({color:0x333333,flatShading:true}),
+      new THREE.MeshPhongMaterial({color:0x1e1e1e,flatShading:true}),
+      new THREE.MeshPhongMaterial({color:0x3d3d3d,flatShading:true}),
     ];
-    ribbonDefs.forEach(function(d,i){
-      var sa=d[0],m1a=d[1],m2a=d[2],endR=d[3],m1r=d[4],m1y=d[5],m2y=d[6],w=d[7];
-      makeRibbon([
-        new THREE.Vector3(Math.cos(sa)*0.5,    sy,   Math.sin(sa)*0.5),
-        new THREE.Vector3(Math.cos(m1a)*m1r,   m1y,  Math.sin(m1a)*m1r),
-        new THREE.Vector3(Math.cos(m2a)*endR*0.72, m2y, Math.sin(m2a)*endR*0.72),
-        new THREE.Vector3(Math.cos(sa)*endR,   ey,   Math.sin(sa)*endR)
-      ], ribbonCols[i%ribbonCols.length], w);
+    function rootBeam(x1,y1,z1,x2,y2,z2,tw,th,mi){
+      var dx=x2-x1,dy=y2-y1,dz=z2-z1;
+      var len=Math.sqrt(dx*dx+dy*dy+dz*dz);
+      if(len<0.01) return;
+      var m=new THREE.Mesh(new THREE.BoxGeometry(tw,len,th),rootMats[mi%4]);
+      m.position.set((x1+x2)/2,(y1+y2)/2,(z1+z2)/2);
+      m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),new THREE.Vector3(dx/len,dy/len,dz/len));
+      m.castShadow=true; scene.add(m);
+    }
+    function rootCorner(x,y,z,s,mi){
+      var c=new THREE.Mesh(new THREE.BoxGeometry(s,s,s),rootMats[mi%4]);
+      c.position.set(x,y,z); scene.add(c);
+    }
+    // INTERTWINED roots: each root starts radially then horizontal-runs to a DIFFERENT angle,
+    // crossing neighbours. Alternating Y depths create over/under weave.
+    // [startAngle, elbowAngle, r1, y1, r2, y2, endR, tw, th, mi]
+    var rootStartY=-4;
+    var ey=UW+0.5;
+    var step=Math.PI*2/12;
+    var hs=step*0.5; // half-step offset for secondary roots
+    [
+      // PRIMARY — 12 main roots, wide crossing (+/-1.5 steps)
+      // [sA,             eA,               r1, y1,  r2,  y2,  endR, tw,   th,   mi]
+      [0*step,        0*step+step*1.5,   7, -6,  16, -11,  17, 1.10, 0.55, 0],
+      [1*step,        1*step-step*1.5,   6, -8,  14, -13,  15, 0.90, 0.48, 1],
+      [2*step,        2*step+step*1.5,   8, -6,  16, -11,  18, 1.20, 0.60, 2],
+      [3*step,        3*step-step*1.5,   7, -8,  15, -13,  16, 1.00, 0.50, 3],
+      [4*step,        4*step+step*1.5,   6, -6,  16, -11,  17, 1.10, 0.55, 0],
+      [5*step,        5*step-step*1.5,   8, -8,  14, -13,  15, 0.90, 0.45, 1],
+      [6*step,        6*step+step*1.5,   7, -6,  16, -11,  18, 1.20, 0.58, 2],
+      [7*step,        7*step-step*1.5,   6, -8,  15, -13,  16, 1.00, 0.50, 3],
+      [8*step,        8*step+step*1.5,   8, -6,  16, -11,  17, 1.10, 0.55, 0],
+      [9*step,        9*step-step*1.5,   7, -8,  14, -13,  15, 0.90, 0.46, 1],
+      [10*step,      10*step+step*1.5,   6, -6,  16, -11,  18, 1.20, 0.60, 2],
+      [11*step,      11*step-step*1.5,   8, -8,  15, -13,  16, 1.00, 0.50, 3],
+      // SECONDARY — 12 thinner roots offset by half-step, shorter crossing (+/-1 step)
+      [0*step+hs,    0*step+hs+step,     5, -7,  12, -12,  14, 0.70, 0.38, 1],
+      [1*step+hs,    1*step+hs-step,     5, -9,  11, -14,  13, 0.65, 0.35, 2],
+      [2*step+hs,    2*step+hs+step,     6, -7,  13, -12,  15, 0.72, 0.38, 3],
+      [3*step+hs,    3*step+hs-step,     5, -9,  12, -14,  14, 0.65, 0.35, 0],
+      [4*step+hs,    4*step+hs+step,     6, -7,  11, -12,  14, 0.70, 0.38, 1],
+      [5*step+hs,    5*step+hs-step,     5, -9,  13, -14,  15, 0.65, 0.35, 2],
+      [6*step+hs,    6*step+hs+step,     6, -7,  12, -12,  14, 0.72, 0.38, 3],
+      [7*step+hs,    7*step+hs-step,     5, -9,  11, -14,  13, 0.65, 0.35, 0],
+      [8*step+hs,    8*step+hs+step,     6, -7,  13, -12,  15, 0.70, 0.38, 1],
+      [9*step+hs,    9*step+hs-step,     5, -9,  12, -14,  14, 0.65, 0.35, 2],
+      [10*step+hs,  10*step+hs+step,     6, -7,  11, -12,  14, 0.72, 0.38, 3],
+      [11*step+hs,  11*step+hs-step,     5, -9,  13, -14,  15, 0.65, 0.35, 0],
+      // TERTIARY — 8 thin surface roots, nearly horizontal, short crossing
+      [0.25,   0.25+step*2,   4, -5,  10, -10,  12, 0.50, 0.28, 2],
+      [1.30,   1.30-step*2,   4, -5,   9, -10,  11, 0.48, 0.26, 3],
+      [2.35,   2.35+step*2,   5, -5,  10, -10,  13, 0.50, 0.28, 0],
+      [3.40,   3.40-step*2,   4, -5,   9, -10,  11, 0.48, 0.26, 1],
+      [4.45,   4.45+step*2,   5, -5,  10, -10,  12, 0.50, 0.28, 2],
+      [5.50,   5.50-step*2,   4, -5,   9, -10,  11, 0.48, 0.26, 3],
+      [0.80,   0.80+step*2,   4, -5,  10, -10,  13, 0.50, 0.28, 0],
+      [2.90,   2.90-step*2,   4, -5,   9, -10,  12, 0.48, 0.26, 1],
+    ].forEach(function(d){
+      var sa=d[0], ea=d[1], r1=d[2], y1=d[3], r2=d[4], y2=d[5], er=d[6], tw=d[7], th=d[8], mi=d[9];
+      var p0x=Math.cos(sa)*0.5, p0z=Math.sin(sa)*0.5;           // trunk exit
+      var p1x=Math.cos(sa)*r1,  p1z=Math.sin(sa)*r1;            // first elbow (radial)
+      var p2x=Math.cos(ea)*r2,  p2z=Math.sin(ea)*r2;            // second elbow (deviated angle)
+      var p3x=Math.cos(ea)*er,  p3z=Math.sin(ea)*er;            // tip at ground
+      // seg 1: diagonal drop from trunk to first elbow
+      rootBeam(p0x,rootStartY,p0z, p1x,y1,p1z, tw,th,mi);
+      // seg 2: angular run crossing to deviated angle (at y1 → y2)
+      rootBeam(p1x,y1,p1z, p2x,y2,p2z, tw*0.82,th*0.75,mi);
+      // seg 3: horizontal run outward to final radius (at constant y2)
+      rootBeam(p2x,y2,p2z, p3x,y2,p3z, tw*0.68,th*0.60,mi);
+      // seg 4: vertical drop to ground
+      rootBeam(p3x,y2,p3z, p3x,ey,p3z, tw*0.52,th*0.46,mi);
+      // corner filler boxes
+      rootCorner(p1x,y1,p1z, tw*0.95, mi);
+      rootCorner(p2x,y2,p2z, tw*0.75, mi);
+      rootCorner(p3x,y2,p3z, tw*0.58, mi);
     });
 
     // Stars in the underworld void
@@ -484,14 +522,28 @@
     var plat = new THREE.Mesh(new THREE.CircleGeometry(8.0,12), fmf(0x72b83a));
     plat.rotation.x=-Math.PI/2; plat.position.y=MW+4.52; scene.add(plat);
 
+    // gate angle in palisade convention: cos(pa)=sin(ugAngle), sin(pa)=cos(ugAngle)
+    var gatePA = Math.atan2(6.45, 3.45); // gate position (x=3.45, z=6.45)
+    var gateGap = 0.26; // half-angle of opening
     var pMat = fmf(0x9a6230);
     for (var i=0; i<32; i++) {
       var pa = i/32*Math.PI*2;
+      var adiff = pa - gatePA;
+      while(adiff>Math.PI) adiff-=Math.PI*2; while(adiff<-Math.PI) adiff+=Math.PI*2;
+      if(Math.abs(adiff)<gateGap) continue; // skip posts inside gate
       var post = new THREE.Mesh(new THREE.BoxGeometry(0.24,1.5,0.24), pMat);
       post.position.set(Math.cos(pa)*7.6, MW+5.25, Math.sin(pa)*7.6); post.castShadow=true; scene.add(post);
     }
-    var railRing = new THREE.Mesh(new THREE.TorusGeometry(7.6,0.12,4,32), fmf(0x7a4820));
-    railRing.rotation.x=Math.PI/2; railRing.position.y=MW+5.65; scene.add(railRing);
+    // open-arc rail — TubeGeometry going around all but the gate gap
+    (function(){
+      var pts=[], segs=64, r=7.6, startA=gatePA+gateGap, span=Math.PI*2-gateGap*2;
+      for(var i=0;i<=segs;i++){
+        var a=startA+span*i/segs;
+        pts.push(new THREE.Vector3(Math.cos(a)*r, MW+5.65, Math.sin(a)*r));
+      }
+      var rail=new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),segs,0.12,4,false),fmf(0x7a4820));
+      scene.add(rail);
+    })();
 
     [0,Math.PI*0.5,Math.PI,Math.PI*1.5].forEach(function(a){
       var tx=Math.cos(a)*7.4, tz=Math.sin(a)*7.4, ty=MW+4.5;
@@ -502,13 +554,82 @@
     });
 
     var gty = MW+4.5;
-    var gbase = new THREE.Mesh(new THREE.BoxGeometry(2.0,2.8,1.4), fmf(0xba7840));
-    gbase.position.set(0,gty+1.4,7.5); gbase.castShadow=true; scene.add(gbase);
-    tag(gbase, loreData.gate.world, loreData.gate.title, loreData.gate.text);
-    var groof = new THREE.Mesh(new THREE.ConeGeometry(1.3,1.3,4,1), fmf(0x7a4020));
-    groof.position.set(0,gty+3.35,7.5); groof.rotation.y=Math.PI/4; scene.add(groof);
-    var garch = new THREE.Mesh(new THREE.BoxGeometry(0.8,1.0,0.4), fmf(0x221005));
-    garch.position.set(0,gty+0.5,7.0); scene.add(garch);
+    var gWoodDark = fmf(0x7a4820), gWoodMid = fmf(0x9a6030), gWoodDarkest = fmf(0x3a1c08);
+
+    // ── UPPER HILLFORT GATE — group so we can rotate it as one piece ──
+    var ugGroup = new THREE.Group();
+    ugGroup.position.set(3.45, 0, 6.45);
+    ugGroup.rotation.y = 0.54;
+    window._ugGroup = ugGroup;
+    scene.add(ugGroup);
+    function ugAdd(m){ ugGroup.add(m); }
+    [-1.35, 1.35].forEach(function(ox, ti){
+      var gtower = new THREE.Mesh(new THREE.BoxGeometry(1.1,3.4,1.1), gWoodMid);
+      gtower.position.set(ox, gty+1.7, 0); gtower.castShadow=true; ugAdd(gtower);
+      if(ti===0) tag(gtower, loreData.gate.world, loreData.gate.title, loreData.gate.text);
+      var groof = new THREE.Mesh(new THREE.ConeGeometry(0.88,1.1,4,1), gWoodDark);
+      groof.position.set(ox, gty+3.95, 0); groof.rotation.y=Math.PI/4; groof.castShadow=true; ugAdd(groof);
+      [0.6,1.5,2.4].forEach(function(by){
+        var band=new THREE.Mesh(new THREE.BoxGeometry(1.15,0.12,1.15), gWoodDarkest);
+        band.position.set(ox, gty+by, 0); ugAdd(band);
+      });
+      var tside = ox>0?0.65:-0.65;
+      var tpole=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.07,1.0,5,1), gWoodDarkest);
+      tpole.position.set(ox+tside, gty+1.5, 0); ugAdd(tpole);
+      var tbowl=new THREE.Mesh(new THREE.CylinderGeometry(0.10,0.06,0.18,6,1), fmf(0x3a2010));
+      tbowl.position.set(ox+tside, gty+2.06, 0); ugAdd(tbowl);
+      var tflame=new THREE.Mesh(new THREE.ConeGeometry(0.08,0.26,6,1), bm(0xff8820,0.9));
+      tflame.position.set(ox+tside, gty+2.26, 0); ugAdd(tflame);
+      var tL=new THREE.PointLight(0xff9930,1.0,4.5);
+      tL.position.set(ox+tside, gty+2.4, 0); ugGroup.add(tL);
+    });
+    var glintel=new THREE.Mesh(new THREE.BoxGeometry(2.9,0.28,0.9), gWoodDark);
+    glintel.position.set(0, gty+3.4, 0); ugAdd(glintel);
+    var gbeam2u=new THREE.Mesh(new THREE.BoxGeometry(3.2,0.16,0.6), gWoodDarkest);
+    gbeam2u.position.set(0, gty+3.72, 0); ugAdd(gbeam2u);
+    var garch=new THREE.Mesh(new THREE.BoxGeometry(1.5,2.2,0.05), gWoodDarkest);
+    garch.position.set(0, gty+1.1, -0.32); ugAdd(garch);
+
+    // ── VILLAGE ENTRANCE GATE — group for matching rotation ──
+    var entMat  = fmf(0x7a4820);
+    var entMat2 = fmf(0x5a3010);
+    var egGroup = new THREE.Group();
+    egGroup.position.set(2.0, 0, 12.2);
+    egGroup.rotation.y = -Math.atan2(2.0, 12.2); // perpendicular to mound edge at this point
+    scene.add(egGroup);
+    function egAdd(m){ egGroup.add(m); }
+    [[-1.1,0],[1.1,0]].forEach(function(p){
+      var post=new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.20,3.6,7,1),entMat);
+      post.position.set(p[0], MW+1.8, 0); post.castShadow=true; egAdd(post);
+      var cap=new THREE.Mesh(new THREE.CylinderGeometry(0.10,0.18,0.28,7,1),entMat2);
+      cap.position.set(p[0], MW+3.74, 0); egAdd(cap);
+    });
+    var entBeam=new THREE.Mesh(new THREE.BoxGeometry(2.6,0.22,0.28),entMat2);
+    entBeam.position.set(0, MW+3.5, 0); egAdd(entBeam);
+    var entBeam2=new THREE.Mesh(new THREE.BoxGeometry(3.0,0.14,0.20),entMat);
+    entBeam2.position.set(0, MW+3.78, 0); egAdd(entBeam2);
+    var plate=new THREE.Mesh(new THREE.BoxGeometry(1.4,0.48,0.12),fmf(0x3a1e06));
+    plate.position.set(0, MW+2.6, -0.08); egAdd(plate);
+
+    [[-1.9,0.3],[1.9,0.3]].forEach(function(p,ti){
+      var tpole=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.08,2.0,5,1),entMat2);
+      tpole.position.set(p[0], MW+1.0, p[1]); egAdd(tpole);
+      var tbowl=new THREE.Mesh(new THREE.CylinderGeometry(0.14,0.08,0.22,6,1),fmf(0x3a2010));
+      tbowl.position.set(p[0], MW+2.12, p[1]); egAdd(tbowl);
+      var tfire=new THREE.Mesh(new THREE.ConeGeometry(0.10,0.32,6,1),bm(0xff8820,0.9));
+      tfire.position.set(p[0], MW+2.38, p[1]); egAdd(tfire);
+      var tL=new THREE.PointLight(0xff9930, 1.2, 5.0);
+      tL.position.set(p[0], MW+2.5, p[1]); scene.add(tL);
+    });
+
+    // dirt path from outer edge toward gate
+    var entZ=12.2;
+    for(var pi=0; pi<8; pi++){
+      var pz=entZ+1.5+pi*1.1;
+      var pw=1.8+pi*0.2;
+      var pathSlab=new THREE.Mesh(new THREE.BoxGeometry(pw,0.04,0.9),fmf(pi%2===0?0xb09060:0xa07c50));
+      pathSlab.position.set(0, MW+0.02, pz); pathSlab.receiveShadow=true; scene.add(pathSlab);
+    }
 
     // Stairs — wide flat steps going from outer ground up the mound face
     var STEPS = 18;
@@ -535,7 +656,6 @@
     var longDefs = [
       // [x, z, rotY, w, d]   outer ring near palisade
       [ 6.0,  2.2, 0.4,  3.4, 1.4],
-      [ 2.4,  6.2, 1.1,  3.4, 1.4],
       [-2.8,  6.0, 2.0,  3.0, 1.3],
       [-6.0,  2.0, 2.5,  3.4, 1.4],
       [-5.8, -2.8, 0.9,  3.0, 1.3],
@@ -714,6 +834,35 @@
       dp.position.set(dockX+Math.cos(dockA)*2+Math.sin(dockA)*side, MW+0.45, dockZ+Math.sin(dockA)*2-Math.cos(dockA)*side);
       scene.add(dp);
     });
+    // dock gate arch — two posts + crossbeam at the shore entrance
+    var dockGateMat = fmf(0x6a3c10);
+    var dockGateMat2 = fmf(0x7a4818);
+    var gateR = 11.4; // just before planks
+    var gx0=Math.cos(dockA)*gateR, gz0=Math.sin(dockA)*gateR;
+    var gpx=Math.sin(dockA)*0.7, gpz=-Math.cos(dockA)*0.7; // perpendicular offset
+    var postH=2.0;
+    // left post
+    var gp1=new THREE.Mesh(new THREE.CylinderGeometry(0.10,0.13,postH,6,1),dockGateMat);
+    gp1.position.set(gx0+gpx, MW+postH/2, gz0+gpz); scene.add(gp1);
+    // right post
+    var gp2=new THREE.Mesh(new THREE.CylinderGeometry(0.10,0.13,postH,6,1),dockGateMat);
+    gp2.position.set(gx0-gpx, MW+postH/2, gz0-gpz); scene.add(gp2);
+    // main crossbeam
+    var gbeam=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.16,0.22),dockGateMat2);
+    gbeam.rotation.y=dockA; gbeam.position.set(gx0, MW+postH+0.08, gz0); scene.add(gbeam);
+    // upper accent beam (slightly shorter, sitting on top)
+    var gbeam2=new THREE.Mesh(new THREE.BoxGeometry(1.9,0.10,0.15),dockGateMat);
+    gbeam2.rotation.y=dockA; gbeam2.position.set(gx0, MW+postH+0.25, gz0); scene.add(gbeam2);
+    // hanging rope/tie details on posts
+    [-0.55,0.55].forEach(function(off){
+      var knob=new THREE.Mesh(new THREE.SphereGeometry(0.07,5,4),dockGateMat2);
+      var kx=gx0+Math.cos(dockA)*0+Math.sin(dockA)*off*-1;
+      var kz=gz0+Math.sin(dockA)*0-Math.cos(dockA)*off;
+      knob.position.set(kx+gpx*(off>0?1:-1)*0.0, MW+postH+0.08, kz+gpz*(off>0?1:-1)*0.0);
+      // just put the knobs at the post tops
+      knob.position.set(gx0+(off>0?gpx:-gpx), MW+postH+0.09, gz0+(off>0?gpz:-gpz)); scene.add(knob);
+    });
+
     // light reflecting off water
     var lakeL=new THREE.PointLight(0x1a5588,2.0,22);
     lakeL.position.set(Math.cos((arcStart+arcEnd)/2)*15, MW+1.5, Math.sin((arcStart+arcEnd)/2)*15);
@@ -746,20 +895,30 @@
     var sail = new THREE.Mesh(new THREE.PlaneGeometry(1.1,1.3), fmf(0xf0e8d0));
     sail.position.set(bx+0.3,boatY+1.35,bz); sail.rotation.y=boatA+0.3; scene.add(sail);
 
-    // lily pads — small, dark green, round enough to not read as polygons
+    // lily pads — clustered in N-E area (near ship, angle -0.3 to -0.8, radius 13-17)
     var lilyDefs=[
-      [0.25,14.2],[0.65,16.1],[0.95,14.8],[1.35,15.5],[1.65,13.8],[1.05,16.5]
+      [-0.30,13.8],[-0.45,15.2],[-0.55,14.0],[-0.65,16.3],[-0.72,13.5],
+      [-0.50,17.0],[-0.38,15.8],[-0.60,14.8],[-0.78,15.5],[-0.42,13.2]
     ];
     lilyDefs.forEach(function(ld){
       var lpx=Math.cos(ld[0])*ld[1], lpz=Math.sin(ld[0])*ld[1];
       var pad=new THREE.Mesh(new THREE.CircleGeometry(0.22+Math.random()*0.10,16),
         new THREE.MeshPhongMaterial({color:0x2a5c1e,flatShading:false}));
       pad.rotation.x=-Math.PI/2; pad.position.set(lpx,MW+0.03,lpz); scene.add(pad);
-      if (Math.random()>0.5) {
+      if (Math.random()>0.4) {
         var flower=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.06,0.08,8,1),
           new THREE.MeshPhongMaterial({color:0xf0d8a0,flatShading:false}));
         flower.position.set(lpx,MW+0.07,lpz); scene.add(flower);
       }
+    });
+    // reeds in N-E cluster
+    [[-0.32,12.4],[-0.48,12.8],[-0.58,13.0],[-0.70,12.5],[-0.62,17.8],[-0.52,18.2],[-0.40,17.5]].forEach(function(r){
+      var rx=Math.cos(r[0])*r[1], rz=Math.sin(r[0])*r[1];
+      var rh=0.5+Math.random()*0.7;
+      var reed=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.05,rh,4,1),fmf(0x5a7830));
+      reed.position.set(rx,MW+rh/2,rz); scene.add(reed);
+      var rtip=new THREE.Mesh(new THREE.CylinderGeometry(0.055,0.04,0.24,4,1),fmf(0x3a2010));
+      rtip.position.set(rx,MW+rh+0.12,rz); scene.add(rtip);
     });
 
     // heron / bird — standing at shore, one side of lake
@@ -807,6 +966,54 @@
       sp.position.set(d[1],cY,d[2]); scene.add(sp);
     });
 
+    // ── CARDINAL GROVES — simple trees + bushes near each compass point ─
+    var trkMats=[fmf(0x4a2e0c),fmf(0x3a2208)];
+    var fol1=fmf(0x3a6020), fol2=fmf(0x2e5018), fol3=fmf(0x4a7228);
+    var bsh1=fmf(0x336018), bsh2=fmf(0x264a10);
+    function simpleTree(x,z,h,r,fi){
+      var t=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.18,h,6,1),trkMats[fi%2]);
+      t.position.set(x,MW+h/2,z); t.castShadow=true; scene.add(t);
+      var c=new THREE.Mesh(new THREE.ConeGeometry(r,r*1.6,7,1),[fol1,fol2,fol3][fi%3]);
+      c.position.set(x,MW+h+r*0.7,z); c.castShadow=true; scene.add(c);
+      if(h>1.6){
+        var c2=new THREE.Mesh(new THREE.ConeGeometry(r*0.65,r*1.1,7,1),[fol2,fol3,fol1][fi%3]);
+        c2.position.set(x,MW+h+r*1.5,z); scene.add(c2);
+      }
+    }
+    function simpleBush(x,z,r,fi){
+      var b=new THREE.Mesh(new THREE.SphereGeometry(r,7,5),[bsh1,bsh2][fi%2]);
+      b.scale.y=0.65; b.position.set(x,MW+r*0.55,z); b.castShadow=true; scene.add(b);
+    }
+    // grove definitions per cardinal: [x, z, trunkH, foliageR, index]
+    var groves = {
+      N: [
+        [ -1.8,-16.2, 2.5, 1.1, 2],[ -3.5,-15.0, 1.5, 0.7, 0],
+        // bushes
+        [ -2.5,-14.2, 0.55, 0],[ 0.0,-17.5, 0.40, 0]
+      ],
+      S: [
+        [ -1.5, 15.5, 2.0, 0.9, 1],[  3.0, 16.8, 2.4, 1.1, 0],[ -3.2, 15.8, 1.6, 0.75,2],
+        [  1.0, 17.5, 1.4, 0.65,1],[ -0.5, 14.8, 2.1, 1.0, 0],
+        [ -2.0, 14.2, 0.50, 1],[ 2.8, 15.0, 0.45, 0],[ 0.5, 18.0, 0.38, 1]
+      ],
+      E: [
+        [ 15.5,  1.5, 2.3, 1.0, 2],[ 16.0,  3.2, 1.5, 0.70,1],[ 18.0,  0.8, 1.3, 0.60,0],
+        [ 14.2,  2.5, 0.52, 0],[ 17.2,  0.0, 0.40, 0]
+      ],
+      W: [
+        [-15.5, -1.0, 2.1, 0.95,1],[-17.2,  2.5, 1.6, 0.75,2],[-16.0, -3.0, 2.4, 1.05,0],
+        [-14.8,  0.8, 1.5, 0.70,1],[-18.0, -0.5, 1.2, 0.55,2],
+        [-14.2, -2.2, 0.48, 1],[-15.8,  1.5, 0.42, 0],[-17.0,  0.2, 0.38, 1]
+      ]
+    };
+    Object.keys(groves).forEach(function(dir){
+      var g=groves[dir];
+      g.forEach(function(d,i){
+        if(d.length===5) simpleTree(d[0],d[1],d[2],d[3],d[4]);
+        else             simpleBush(d[0],d[1],d[2],d[3]);
+      });
+    });
+
     // ── TOTEMS — 2 tall carved posts outside the village ─
     // scale: overall height multiplier, girth: radius multiplier
     function makeTotem(tx, ty, tz, postCol, faceCol, facingAngle, scale, girth) {
@@ -847,94 +1054,140 @@
     // Saule — pale honey birch, shorter and slender
     makeTotem( 12.0, MW, 8.5,  0xc8a060, 0xe8c888, Math.PI*1.85, 0.80, 0.8);
 
-    // ── UPPER WORLD — TREE CROWN ─────────────────────────
+    // ── UPPER WORLD — GIANT OAK CROWN + CLOUDS ───────────
     var SW = 18;
+    var oakBark = 0x3a2810, oakBarkL = 0x4a3418;
 
-    // The trunk continues up into the crown
-    var upperTrunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.28,6,8,1), fmf(0x1a3828));
-    upperTrunk.position.y = SW+3; scene.add(upperTrunk);
+    // upper trunk continuation — thick oak, wider
+    var upperTrunk = new THREE.Mesh(new THREE.CylinderGeometry(0.30,0.42,7,7,1), fmf(oakBark));
+    upperTrunk.position.y = SW+3.5; scene.add(upperTrunk);
 
-    // Main branch arms spreading out from trunk top
-    var branchCols = [0x1e4a2a,0x2a5a30,0x163820,0x224030];
-    var branches = [
-      [0, SW+5, 0,  7, SW+7,  4,  0.18, 0.28],
-      [0, SW+5, 0, -6, SW+7,  3,  0.18, 0.28],
-      [0, SW+5, 0,  4, SW+7, -6,  0.15, 0.24],
-      [0, SW+5, 0, -3, SW+6, -7,  0.15, 0.24],
-      [0, SW+5, 0,  8, SW+6, -1,  0.12, 0.20],
-      [0, SW+5, 0, -7, SW+6, -3,  0.12, 0.20],
-      [0, SW+5, 0,  1, SW+6,  8,  0.12, 0.20],
-      [0, SW+5, 0, -2, SW+6, -8,  0.10, 0.18]
+    // massive spreading oak branches — wide & nearly horizontal
+    var skyBranches = [
+      [0,SW+5,0,  10,SW+7,  5,  0.28,0.38],
+      [0,SW+5,0, -9, SW+7,  4,  0.26,0.36],
+      [0,SW+5,0,   5,SW+6, -10, 0.24,0.34],
+      [0,SW+5,0,  -6,SW+6, -9,  0.22,0.32],
+      [0,SW+5,0,  12,SW+6, -2,  0.20,0.28],
+      [0,SW+5,0, -12,SW+6, -1,  0.20,0.28],
+      [0,SW+5,0,   2,SW+6,  12, 0.20,0.28],
+      [0,SW+5,0,  -2,SW+6, -12, 0.18,0.26],
+      // secondary branches off primaries
+      [8, SW+6,3,  13,SW+7, 8,  0.14,0.18],
+      [-7,SW+6,3, -13,SW+7, 7,  0.12,0.16],
+      [4, SW+6,-8,  8,SW+7,-13, 0.12,0.16],
+      [-5,SW+6,-7,-10,SW+7,-12, 0.12,0.16],
     ];
-    branches.forEach(function(b,i){
+    skyBranches.forEach(function(b){
       var dx=b[3]-b[0],dy=b[4]-b[1],dz=b[5]-b[2];
       var len=Math.sqrt(dx*dx+dy*dy+dz*dz);
-      var br=new THREE.Mesh(new THREE.CylinderGeometry(b[6],b[7],len,6,1),fmf(branchCols[i%4]));
-      br.position.set((b[0]+b[3])/2,(b[1]+b[4])/2,(b[2]+b[5])/2);
-      var dir=new THREE.Vector3(dx,dy,dz).normalize();
-      br.setRotationFromQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),dir));
-      br.castShadow=true; scene.add(br);
+      var curve=new THREE.CatmullRomCurve3([
+        new THREE.Vector3(b[0],b[1],b[2]),
+        new THREE.Vector3((b[0]+b[3])/2+Math.random()*2-1, (b[1]+b[4])/2, (b[2]+b[5])/2+Math.random()*2-1),
+        new THREE.Vector3(b[3],b[4],b[5])
+      ]);
+      var geo=new THREE.TubeGeometry(curve,12,b[6],6,false);
+      var br=new THREE.Mesh(geo,fmf(oakBark)); br.castShadow=true; scene.add(br);
     });
 
-    // Foliage — dense cluster of gold/white/cream spheres forming the canopy mass
-    var leafCols=[0xffd700,0xffe860,0xfff8c0,0xffec40,0xfffaaa,0xffd040,0xffeebb,0xffc820];
-    var canopyDef=[
-      // [x, y, z, radius]  — a wide spread of overlapping spheres
-      [0,   SW+10, 0,   5.0],
-      [5,   SW+9,  3,   4.0], [-5,  SW+9,  3,   3.8],
-      [4,   SW+9, -5,   3.8], [-4,  SW+9, -5,   3.6],
-      [7,   SW+8,  0,   3.2], [-7,  SW+8,  0,   3.2],
-      [0,   SW+8,  7,   3.2], [0,   SW+8, -7,   3.0],
-      [9,   SW+7,  4,   2.8], [-9,  SW+7,  4,   2.6],
-      [6,   SW+7, -7,   2.8], [-6,  SW+7, -7,   2.6],
-      [3,   SW+12, 2,   3.5], [-3,  SW+12,-2,   3.2],
-      [10,  SW+7,  0,   2.2], [-10, SW+7,  0,   2.2],
-      [0,   SW+7,  10,  2.2], [0,   SW+7, -10,  2.0],
-      [2,   SW+8,  0,   2.5], [-2,  SW+8,  0,   2.5]
+    // foliage — large flattened disc-like masses (like the reference) in deep oak green
+    var leafGreen=[0x2d5a1b,0x3a6e22,0x4a7e2a,0x2a5018,0x537830,0x3f6820];
+    var leafYellow=[0x8a9a18,0xa0aa20,0x7a8a10];
+    function makeLeafDisc(lx,ly,lz,rx,ry) {
+      // flat disc shape — squashed sphere
+      var col=leafGreen[Math.floor(Math.random()*leafGreen.length)];
+      var s=new THREE.Mesh(new THREE.SphereGeometry(rx,8,5),fmf(col));
+      s.scale.y=ry/rx; s.position.set(lx,ly,lz); s.castShadow=true; scene.add(s);
+    }
+    // wide disc layers — the giant flat canopy pads
+    var discDefs=[
+      [0,   SW+8,  0,   8.0, 1.8],
+      [5,   SW+8,  6,   5.5, 1.4],
+      [-6,  SW+8,  5,   5.0, 1.3],
+      [6,   SW+8, -6,   5.0, 1.3],
+      [-5,  SW+8, -7,   4.8, 1.2],
+      [11,  SW+7,  2,   4.0, 1.2],
+      [-11, SW+7,  2,   3.8, 1.1],
+      [2,   SW+7,  12,  4.0, 1.2],
+      [-2,  SW+7, -12,  3.8, 1.1],
+      [8,   SW+9, -8,   3.5, 1.0],
+      [-9,  SW+9, -6,   3.5, 1.0],
+      [0,   SW+11, 0,   5.5, 1.5],
+      [4,   SW+11, 4,   3.5, 1.0],
+      [-4,  SW+11,-4,   3.2, 0.9],
     ];
-    canopyDef.forEach(function(b,i){
-      var s=new THREE.Mesh(new THREE.SphereGeometry(b[3],6,5),fmf(leafCols[i%8]));
-      s.position.set(b[0],b[1],b[2]); s.castShadow=true; scene.add(s);
-      if (i===0) tag(s, loreData.canopy.world, loreData.canopy.title, loreData.canopy.text);
+    discDefs.forEach(function(d,i){
+      makeLeafDisc(d[0],d[1],d[2],d[3],d[4]);
+      if (i===0) {
+        // tag the main centre disc for lore
+        var tagMesh=new THREE.Mesh(new THREE.SphereGeometry(d[3],8,5),fmf(leafGreen[0]));
+        tagMesh.scale.y=d[4]/d[3]; tagMesh.position.set(d[0],d[1],d[2]); tagMesh.visible=false; scene.add(tagMesh);
+        tag(tagMesh, loreData.canopy.world, loreData.canopy.title, loreData.canopy.text);
+      }
+    });
+    // sunlit yellow edge highlights on outermost discs
+    [[11,SW+7,2],[2,SW+7,12],[-11,SW+7,2]].forEach(function(p){
+      var s=new THREE.Mesh(new THREE.SphereGeometry(2.5,7,5),fmf(leafYellow[0]));
+      s.scale.y=0.5; s.position.set(p[0],p[1],p[2]); scene.add(s);
     });
 
-    // Houses nestled IN the canopy — sitting on branch forks
-    var housePositions=[
-      [6,  SW+8,  3,  0.4],
-      [-5, SW+8,  4,  2.0],
-      [4,  SW+8, -5,  1.2],
-      [-4, SW+7, -4,  3.5],
-      [8,  SW+7,  0,  0.8],
-      [-7, SW+7, -2,  2.6],
-      [1,  SW+9,  7,  1.5]
-    ];
-    housePositions.forEach(function(h,i){
+    // FLAT DISC CLOUDS with crumbling fragments
+    var discMatA = new THREE.MeshPhongMaterial({color:0xffffff,emissive:0xeeeeee,emissiveIntensity:0.25,flatShading:false});
+    var discMatB = new THREE.MeshPhongMaterial({color:0xf0f4f8,emissive:0xd0dce8,emissiveIntensity:0.15,flatShading:false});
+    var fragMat  = new THREE.MeshPhongMaterial({color:0xe8eef8,emissive:0xb0c0d8,emissiveIntensity:0.10,flatShading:true});
+    function cloudDisc(x,y,z,rx,rz,ry,mat){
+      var m=new THREE.Mesh(new THREE.SphereGeometry(1,18,8),mat||discMatA);
+      m.scale.set(rx,ry,rz); m.position.set(x,y,z); scene.add(m);
+    }
+    function cloudFrag(x,y,z,r){
+      var g=r>0.5 ? new THREE.OctahedronGeometry(r,0) : new THREE.TetrahedronGeometry(r,0);
+      var m=new THREE.Mesh(g,fragMat);
+      m.rotation.set(x*0.9,z*1.3,y*0.7); m.position.set(x,y,z); scene.add(m);
+    }
+    function makeDiscCloud(cx,cy,cz,sc,frags){
+      cloudDisc(cx,           cy,        cz,           5.5*sc, 3.8*sc, 0.55*sc, discMatA);
+      cloudDisc(cx+4.0*sc,   cy+0.3*sc, cz+1.0*sc,   4.0*sc, 2.8*sc, 0.48*sc, discMatA);
+      cloudDisc(cx-3.5*sc,   cy+0.2*sc, cz-1.0*sc,   3.5*sc, 2.4*sc, 0.44*sc, discMatB);
+      frags.forEach(function(f){
+        cloudFrag(cx+f[0]*sc, cy+f[1]*sc, cz+f[2]*sc, f[3]*sc);
+      });
+    }
+    var frags1=[[3.5,-1.2,1.0,0.55],[5.8,-1.8,0.5,0.42],[2.0,-2.5,3.0,0.38],
+                [-4.0,-1.5,-0.5,0.50],[-5.5,-2.2,-1.0,0.40],[1.0,-3.2,2.0,0.32],
+                [4.5,-3.0,-1.5,0.28],[-2.5,-3.8,1.5,0.25],[0.5,-4.5,0.8,0.22],
+                [6.5,-2.5,0.8,0.35],[-1.0,-5.0,-0.5,0.18],[3.0,-5.5,0.2,0.15]];
+    var frags2=[[4.0,-1.0,0.8,0.52],[-4.2,-1.6,1.2,0.44],[2.5,-2.8,-1.0,0.36],
+                [-1.5,-2.0,3.5,0.40],[5.0,-2.5,-0.8,0.32],[0.2,-3.5,2.5,0.28],
+                [-3.0,-4.0,-1.2,0.24],[1.8,-5.0,0.4,0.20],[5.5,-3.8,1.5,0.30],
+                [-0.8,-5.5,1.0,0.17],[2.2,-6.0,-0.6,0.14]];
+    var frags3=[[3.0,-1.4,0.6,0.48],[5.2,-2.0,1.0,0.38],[-3.5,-1.8,-0.8,0.42],
+                [1.5,-3.0,3.2,0.34],[-2.0,-3.5,1.8,0.28],[4.8,-3.2,-1.0,0.26],
+                [0.5,-4.2,-2.0,0.22],[-4.5,-4.0,0.5,0.20],[1.0,-5.5,1.2,0.16]];
+    // outer ring — large
+    makeDiscCloud(  0, SW+9,   24, 1.30, frags1);
+    makeDiscCloud(-26, SW+9,    2, 1.25, frags2);
+    makeDiscCloud( 26, SW+9,   -3, 1.25, frags3);
+    makeDiscCloud(  3, SW+8,  -24, 1.20, frags1.slice(0,9));
+    makeDiscCloud( 18, SW+10,  18, 1.00, frags3.slice(0,7));
+    makeDiscCloud(-18, SW+9,  -16, 0.95, frags2.slice(0,7));
+    // inner ring — right at canopy edge
+    makeDiscCloud( 12, SW+8,    0, 1.10, frags2.slice(0,8));
+    makeDiscCloud(-12, SW+8,    3, 1.05, frags1.slice(0,8));
+    makeDiscCloud(  2, SW+9,   13, 1.00, frags3.slice(0,6));
+    makeDiscCloud( -1, SW+8,  -13, 0.95, frags2.slice(0,6));
+
+    // small sky houses nestled in branch forks
+    [[8,SW+8,4,0.4],[-6,SW+8,5,2.0],[5,SW+8,-7,1.2],[-5,SW+7,-5,3.5],[11,SW+7,0,0.8],[-10,SW+7,-1,2.6],[1,SW+9,9,1.5]].forEach(function(h,i){
       var hw=new THREE.Mesh(new THREE.BoxGeometry(1.4,1.6,1.1),fmf(i%2===0?0xf8f4e8:0xfffacc));
       hw.position.set(h[0],h[1],h[2]); hw.rotation.y=h[3]; hw.castShadow=true; scene.add(hw);
-      var hr=new THREE.Mesh(new THREE.ConeGeometry(1.1,1.0,4,1),fmf(i%2===0?0xffd700:0xffe84a));
+      var hr=new THREE.Mesh(new THREE.ConeGeometry(1.1,1.0,4,1),fmf(i%2===0?0x6a8830:0x8aaa40));
       hr.position.set(h[0],h[1]+1.3,h[2]); hr.rotation.y=h[3]+Math.PI/4; scene.add(hr);
     });
 
-    // Gold glowing ring on trunk entry into canopy
+    // gold portal ring at trunk entry
     var grMat = bm(0xffd700, 0.5);
     var goldRingM = new THREE.Mesh(new THREE.TorusGeometry(1.0,0.15,6,24), grMat);
     goldRingM.rotation.x=Math.PI/2; goldRingM.position.y=SW+5.2; scene.add(goldRingM);
-
-    // Clouds around the canopy
-    function makeCloud(cx,cy,cz,scale) {
-      [[0,0,0,1.8],[1.6,0.3,0,1.4],[-1.5,0.2,0,1.3],[0.6,0.8,0,1.2],[-0.5,0.6,1.2,1.1],[0.4,0.5,-1.3,1.1]].forEach(function(b){
-        var sp=new THREE.Mesh(new THREE.SphereGeometry(b[3]*scale,6,5),fmf(0xffffff));
-        sp.position.set(cx+b[0]*scale,cy+b[1]*scale,cz+b[2]*scale); scene.add(sp);
-      });
-    }
-    makeCloud(-18, SW+4,  2,  1.6);
-    makeCloud( 19, SW+3, -3,  1.5);
-    makeCloud(-15, SW+5,  14, 1.3);
-    makeCloud( 16, SW+4,  12, 1.4);
-    makeCloud( -8, SW+2, -16, 1.2);
-    makeCloud(  7, SW+6, -16, 1.3);
-    makeCloud(-20, SW+3, -8,  1.1);
-    makeCloud( 20, SW+3,  8,  1.2);
 
     // Gold star particles above
     var sp=[];
@@ -1154,6 +1407,56 @@
       uwMistMat.opacity = 0.3 + 0.1*Math.sin(t*0.9);
       rend.render(scene, cam);
     })();
+  })();
+  </script>
+
+  <style>
+    #gate-editor {
+      position:fixed; bottom:16px; left:16px; z-index:200;
+      background:rgba(20,14,6,0.88); border:1px solid #7a4820;
+      border-radius:8px; padding:12px 16px; color:#f0d890; font:13px/1.6 monospace;
+      min-width:220px; user-select:none;
+    }
+    #gate-editor summary { cursor:pointer; font-weight:bold; letter-spacing:.04em; }
+    #gate-editor label { display:flex; justify-content:space-between; align-items:center; gap:8px; margin:4px 0; }
+    #gate-editor input[type=range] { width:120px; accent-color:#c8882a; }
+    #gate-editor span.val { min-width:40px; text-align:right; color:#ffd870; }
+    #gate-editor button { margin-top:8px; width:100%; background:#5a3010; border:1px solid #9a6030;
+      color:#f0d890; border-radius:4px; padding:4px; cursor:pointer; font:12px monospace; }
+    #gate-editor button:hover { background:#7a4820; }
+  </style>
+
+  <details id="gate-editor">
+    <summary>⚙ Gate editor</summary>
+    <label>X <input type="range" id="ge-x" min="-8" max="8" step="0.05" value="3.57"> <span class="val" id="ge-xv">3.57</span></label>
+    <label>Z <input type="range" id="ge-z" min="2" max="10" step="0.05" value="6.69"> <span class="val" id="ge-zv">6.69</span></label>
+    <label>Rot <input type="range" id="ge-r" min="-1.6" max="1.6" step="0.01" value="-0.49"> <span class="val" id="ge-rv">-0.49</span></label>
+    <button id="ge-copy">Copy values to console</button>
+  </details>
+
+  <script>
+  (function(){
+    function upd(){
+      var g=window._ugGroup; if(!g) return;
+      var x=+document.getElementById('ge-x').value;
+      var z=+document.getElementById('ge-z').value;
+      var r=+document.getElementById('ge-r').value;
+      g.position.set(x, g.position.y, z);
+      g.rotation.y = r;
+      document.getElementById('ge-xv').textContent=x.toFixed(2);
+      document.getElementById('ge-zv').textContent=z.toFixed(2);
+      document.getElementById('ge-rv').textContent=r.toFixed(2);
+    }
+    ['ge-x','ge-z','ge-r'].forEach(function(id){
+      document.getElementById(id).addEventListener('input', upd);
+    });
+    document.getElementById('ge-copy').addEventListener('click', function(){
+      var x=document.getElementById('ge-x').value;
+      var z=document.getElementById('ge-z').value;
+      var r=document.getElementById('ge-r').value;
+      console.log('Gate: x='+x+' z='+z+' rot='+r);
+      alert('Logged to console:\nx='+x+'  z='+z+'  rot='+r);
+    });
   })();
   </script>
 </body>
