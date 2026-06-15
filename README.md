@@ -1,6 +1,6 @@
 # Baltic Mythological World
 
-An interactive 3D exploration of Baltic cosmology built with [Three.js](https://threejs.org/). The scene is a single self-contained HTML file — no build step, no dependencies to install.
+An interactive 3D exploration of Baltic cosmology built with [Three.js](https://threejs.org/). The scene is a single self-contained HTML file.
 
 ## What it is
 
@@ -25,12 +25,7 @@ The world is structured around the **World Tree** (*Pasaulio medis*), the axis c
 
 ## How to run
 
-Open `Baltic mythological world/index.html` directly in a browser. No server required.
-
-```
-Baltic mythological world/
-└── Baltic mythological world/
-    └── index.html        ← open this
+Open `Baltic mythological world/index.html` directly in a browser.
 ```
 
 ## Mythological references
@@ -50,3 +45,4 @@ Baltic (Lithuanian and Latvian) mythology centres on the World Tree as the cosmi
 - [Three.js r128](https://threejs.org/) — 3D rendering
 - Pointer Lock API — walk mode
 - Vanilla JS, no framework
+- Claude Code
