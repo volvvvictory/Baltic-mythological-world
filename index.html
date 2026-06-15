@@ -47,6 +47,38 @@
       pointer-events: none; text-align: center;
     }
     #walk-hint.visible { display: block; }
+    #lore-panel {
+      display: none; position: fixed; bottom: 80px; left: 24px;
+      width: 300px; max-height: 70vh; overflow-y: auto;
+      background: rgba(10,12,20,0.88); border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 14px; padding: 1.2rem 1.4rem; color: #fff;
+      backdrop-filter: blur(12px); transition: opacity 0.2s;
+    }
+    #lore-panel.visible { display: block; }
+    #lore-panel .lore-world {
+      font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+      color: rgba(255,220,100,0.75); margin-bottom: 6px;
+    }
+    #lore-panel .lore-title {
+      font-size: 17px; font-weight: 500; margin-bottom: 10px; line-height: 1.3;
+    }
+    #lore-panel .lore-text {
+      font-size: 13px; line-height: 1.8; color: rgba(255,255,255,0.78);
+    }
+    #lore-panel .lore-close {
+      position: absolute; top: 10px; right: 14px;
+      background: none; border: none; color: rgba(255,255,255,0.45);
+      font-size: 18px; cursor: pointer; padding: 0; line-height: 1;
+    }
+    #lore-panel .lore-close:hover { color: #fff; background: none; }
+    #hover-tag {
+      display: none; position: fixed; pointer-events: none;
+      background: rgba(10,12,20,0.82); border: 1px solid rgba(255,220,100,0.4);
+      color: rgba(255,220,100,0.95); font-size: 11px; letter-spacing: 0.1em;
+      text-transform: uppercase; padding: 5px 10px; border-radius: 6px;
+      backdrop-filter: blur(8px); white-space: nowrap;
+      transform: translate(14px, -50%);
+    }
   </style>
 </head>
 <body>
@@ -59,6 +91,13 @@
     <button onclick="goAll()">All three</button>
     <button onclick="enterWalk()" id="walkBtn">Walk inside</button>
   </div>
+  <div id="lore-panel">
+    <button class="lore-close" onclick="closeLore()">✕</button>
+    <div class="lore-world" id="lore-world"></div>
+    <div class="lore-title" id="lore-title"></div>
+    <div class="lore-text" id="lore-text"></div>
+  </div>
+  <div id="hover-tag"></div>
   <div id="walk-overlay">
     <p>WASD — move &nbsp;·&nbsp; Mouse — look<br>Click to start &nbsp;·&nbsp; Esc to exit</p>
     <button onclick="requestLock()">Click to enter</button>
@@ -131,50 +170,237 @@
     sun.shadow.radius = 3;
     scene.add(sun);
 
-    var fireL  = new THREE.PointLight(0xff5500, 5.0, 34); fireL.position.set(0,-16,0);   scene.add(fireL);
-    var waterL = new THREE.PointLight(0x0066dd, 3.0, 28); waterL.position.set(0,-17,0);  scene.add(waterL);
-    var rL1    = new THREE.PointLight(0x00aacc, 2.0, 20); rL1.position.set(7,-14,4);     scene.add(rL1);
-    var rL2    = new THREE.PointLight(0x3300cc, 2.0, 20); rL2.position.set(-7,-14,-4);   scene.add(rL2);
-    var eL1    = new THREE.PointLight(0xff6600, 1.5, 12); eL1.position.set(5,-19,5);     scene.add(eL1);
-    var eL2    = new THREE.PointLight(0xff3300, 1.2, 10); eL2.position.set(-6,-20,-4);   scene.add(eL2);
+    var fireL  = new THREE.PointLight(0xffffff, 4.0, 34); fireL.position.set(0,-16,0);   scene.add(fireL);
+    var waterL = new THREE.PointLight(0xcccccc, 2.5, 28); waterL.position.set(0,-17,0);  scene.add(waterL);
+    var rL1    = new THREE.PointLight(0xaaaaaa, 1.8, 20); rL1.position.set(7,-14,4);     scene.add(rL1);
+    var rL2    = new THREE.PointLight(0xbbbbbb, 1.8, 20); rL2.position.set(-7,-14,-4);   scene.add(rL2);
+    var eL1    = new THREE.PointLight(0xffffff, 1.5, 12); eL1.position.set(5,-19,5);     scene.add(eL1);
+    var eL2    = new THREE.PointLight(0xdddddd, 1.2, 10); eL2.position.set(-6,-20,-4);   scene.add(eL2);
     var fpL    = new THREE.PointLight(0xff8800, 2.5, 10); fpL.position.set(0,5.5,0);     scene.add(fpL);
     var skyL   = new THREE.PointLight(0xffd700, 1.8, 60); skyL.position.set(0,30,0);     scene.add(skyL);
 
-    // ── TRUNK (world tree axis) ──────────────────────────
-    [[0.45,0.65,7,0x3a6040,-17],[0.35,0.45,11,0x2e5035,-7.5],[0.25,0.35,13,0x224030,3]].forEach(function(s){
-      var m = new THREE.Mesh(new THREE.CylinderGeometry(s[0],s[1],s[2],8,1), fmf(s[3]));
+    // ── LORE ────────────────────────────────────────────
+    var clickables = [];
+
+    function tag(mesh, world, title, text) {
+      if (!mesh) return;
+      mesh.userData.lore = {world:world, title:title, text:text};
+      clickables.push(mesh);
+    }
+
+    var loreData = {
+      tree: {
+        world: 'The World Tree — Axis Mundi',
+        title: 'The Sacred Oak',
+        text: 'At the centre of the cosmos stood the World Tree — a great oak with nine branches connecting sky, earth, and the underworld. A piece of a lightning-struck oak was sacred, kept as a hereditary charm for household prosperity. If a tree breaks or falls in a dream, someone of the family will die.\n\nThe historian Hennenberger described fire offerings at Romove (Rāmava — "a calm, peaceful place") before a great oak with cult images of three deities carved into its trunk, surrounded by an angular curtain. Cutting trees in this sacred grove was forbidden to outsiders.'
+      },
+      hillfort: {
+        world: 'Middle World — Žemė',
+        title: 'The Hillfort',
+        text: 'Baltic tribes built hillforts on elevated mounds as fortified settlements. Wooden palisades of sharpened logs surrounded the plateau. Longhouses inside held families, stores, and workshops. The hillfort was both a refuge in times of raid and a gathering place for the community.\n\nSome tribes instead built on lake islands — "lake castles" (ezerpils). The Āraiši Lake Castle in Vidzeme is the best-preserved example: wooden houses on stilts above an artificial island, surrounded by defensive walls, with evidence of dwellings, workshops, and storage.'
+      },
+      longhouse: {
+        world: 'Middle World — Žemė',
+        title: 'The Longhouse',
+        text: 'Families lived in longhouses — rectangular wooden structures shared by an extended household. A central hearth provided warmth and light. When a child was born, a tree was planted in the backyard, becoming their peer and growing alongside them — gradually sanctified as a bond with the ancestor resting beneath it.\n\nTrees carried gender in Latvian folklore: oak, birch, ash and willow were masculine; linden, pine, spruce, bird-cherry and apple were feminine.'
+      },
+      gate: {
+        world: 'Middle World — Žemė',
+        title: 'The Gate Tower',
+        text: 'The gate was the most defended point of any hillfort — the place where the community controlled who entered and who did not. In Baltic tradition, thresholds and boundaries held strong symbolic power, marking the edge between the familiar and the unknown.\n\nRaids by neighbouring tribes and Viking sea-farers drove communities to build these fortifications on high ground or water, making the gate both a physical and symbolic boundary between safety and the outside world.'
+      },
+      underworld: {
+        world: 'Lower World — Velnias Realm',
+        title: 'The Underworld',
+        text: 'The chthonic world below the earth was home to underground beings and the souls of the dead. Velnias (or Vels) was the god of the underworld, cattle, and the dead — the great antagonist of the sky god Dievs.\n\nThe afterlife was not fixed in one place. In different mythological ideas, the realm of the dead lay beneath the earth or far in the west, at the end of the Sun\'s daily path across the sky. The World Tree\'s roots reached deep into this dark realm, drawing up its hidden waters.'
+      },
+      portal: {
+        world: 'The Cosmic Boundary',
+        title: 'The Portal Ring',
+        text: 'Where the World Tree passes through each realm, a boundary is formed — a threshold between worlds. These liminal zones were places of great power and danger in Baltic belief.\n\nThe Sun goddess Saule was said to travel the sky each day on a chariot, then descend below the horizon into the realm of the dead at night, passing through just such a boundary. At dusk and dawn, the worlds briefly touched.'
+      },
+      canopy: {
+        world: 'Upper World — Dangus',
+        title: 'The Sky Realm',
+        text: 'The world of sky deities sat above all others, reached through the crown of the World Tree. Dievs, the sky god, held court here — a calm, orderly deity who rode across the heavens. Saule, the Sun goddess, wove golden threads and lit the world below.\n\nThe cosmic mountain or heavenly tree was sometimes imagined as a long beanstalk, a mountain of glass, or the great oak itself — its nine branches holding the nine celestial bodies. Gods were said to walk among the branches, and the souls of the heroic dead rested here as birds in the leaves.'
+      }
+    };
+
+    // ── TRUNK (world tree / oak) ─────────────────────────
+    var barkDark = 0x3a2810, barkMid = 0x4a3418, barkLight = 0x5a4020;
+
+    // root flare at base — wide cone suggesting exposed roots
+    var rootFlare = new THREE.Mesh(new THREE.CylinderGeometry(0.65,1.6,2.0,8,1), fmf(0x2e2010));
+    rootFlare.position.y=-17; rootFlare.castShadow=true; scene.add(rootFlare);
+
+    // main trunk — oak-brown, slightly wider than before
+    [[0.55,0.75,7,barkDark,-17],[0.42,0.55,11,barkMid,-7.5]].forEach(function(s,si){
+      var m = new THREE.Mesh(new THREE.CylinderGeometry(s[0],s[1],s[2],7,1), fmf(s[3]));
       m.position.y = s[4]+s[2]/2; m.castShadow=true; scene.add(m);
+      if (si===1) tag(m, loreData.tree.world, loreData.tree.title, loreData.tree.text);
     });
+
+    // gnarled sub-trunks alongside main — give an ancient twisted look
+    [[ 0.18, 0.0,  0.12, 14, -10],
+     [-0.14, 0.0, -0.10, 12,  -9],
+     [ 0.0,  0.10, 0.0,  10, -11]].forEach(function(g){
+      var gt=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.20,g[3],6,1),fmf(barkDark));
+      gt.position.set(g[0],g[4]+g[3]/2,g[2]); gt.rotation.z=g[1]*0.3; gt.castShadow=true; scene.add(gt);
+    });
+
+    // bark bump details along the visible mid-trunk
+    for (var i=0; i<14; i++) {
+      var ba=i/14*Math.PI*2, by=-14+i*2.2;
+      var bump=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.22,0.10),fmf(i%2===0?barkDark:barkMid));
+      bump.position.set(Math.cos(ba)*0.48,by,Math.sin(ba)*0.48); bump.rotation.y=ba; scene.add(bump);
+    }
+
+    // upper trunk — solid from y=11, oak brown
+    var solidTrunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.34,7.5,7,1), fmf(barkLight));
+    solidTrunk.position.y = 11.0 + 7.5/2; solidTrunk.castShadow=true; scene.add(solidTrunk);
+
+    // large spreading oak branches from upper trunk
+    var branchDefs = [
+      // [fromX,fromY,fromZ, toX,toY,toZ, r]
+      [ 0,13, 0,   3.5,16, 2.0,  0.18],
+      [ 0,13, 0,  -3.0,15, 2.5,  0.16],
+      [ 0,13, 0,   2.5,15,-3.0,  0.16],
+      [ 0,13, 0,  -2.0,14,-2.5,  0.14],
+      [ 0,15, 0,   4.5,17,-1.0,  0.12],
+      [ 0,15, 0,  -4.0,17, 1.5,  0.12],
+      [ 0,15, 0,   1.0,17, 4.0,  0.11],
+      [ 0,15, 0,  -1.5,16,-4.5,  0.11],
+    ];
+    branchDefs.forEach(function(b){
+      var from=new THREE.Vector3(b[0],b[1],b[2]);
+      var to=new THREE.Vector3(b[3],b[4],b[5]);
+      var dir=new THREE.Vector3().subVectors(to,from);
+      var len=dir.length();
+      var mid=new THREE.Vector3().addVectors(from,to).multiplyScalar(0.5);
+      var curve=new THREE.CatmullRomCurve3([from, mid.clone().add(new THREE.Vector3((Math.random()-0.5)*1.5,0,(Math.random()-0.5)*1.5)), to]);
+      var geo=new THREE.TubeGeometry(curve,10,b[6],6,false);
+      var mesh=new THREE.Mesh(geo,fmf(barkLight)); mesh.castShadow=true; scene.add(mesh);
+    });
+
+    // fade-in segments where trunk materialises above the hillfort
+    var trunkFade = [
+      [0.31,0.34, 10.5, 11.0, 0.85],
+      [0.29,0.31, 10.0, 10.5, 0.65],
+      [0.27,0.29,  9.5, 10.0, 0.42],
+      [0.25,0.27,  9.0,  9.5, 0.22],
+      [0.24,0.25,  8.5,  9.0, 0.10],
+      [0.23,0.24,  8.0,  8.5, 0.04],
+      [0.22,0.23,  7.5,  8.0, 0.01],
+    ];
+    trunkFade.forEach(function(f){
+      var h=f[3]-f[2];
+      var mat=new THREE.MeshPhongMaterial({color:barkMid,transparent:true,opacity:f[4],flatShading:true,depthWrite:false});
+      var seg=new THREE.Mesh(new THREE.CylinderGeometry(f[0],f[1],h,7,1),mat);
+      seg.position.y=f[2]+h/2; scene.add(seg);
+    });
+    // dissolve corona where trunk meets the hillfort — additive glow widens toward fire
+    var dissolveGeo = new THREE.CylinderGeometry(2.2, 0.5, 7, 10, 1, true);
+    var dissolveMat = new THREE.MeshBasicMaterial({color:0x88ffcc, transparent:true, opacity:0.13, side:THREE.DoubleSide, depthWrite:false, blending:THREE.AdditiveBlending});
+    var dissolveMesh = new THREE.Mesh(dissolveGeo, dissolveMat);
+    dissolveMesh.position.y = 1.0; scene.add(dissolveMesh);
+    // soft outer ring
+    var dissolveGeo2 = new THREE.CylinderGeometry(3.8, 0.4, 5, 10, 1, true);
+    var dissolveMat2 = new THREE.MeshBasicMaterial({color:0x44ddaa, transparent:true, opacity:0.07, side:THREE.DoubleSide, depthWrite:false, blending:THREE.AdditiveBlending});
+    var dissolveMesh2 = new THREE.Mesh(dissolveGeo2, dissolveMat2);
+    dissolveMesh2.position.y = 2.0; scene.add(dissolveMesh2);
     [0, 18].forEach(function(y, i){
       var r = new THREE.Mesh(new THREE.TorusGeometry(1.1,0.14,6,24), bm(i===0?0x00ffcc:0xffd700, 0.85));
       r.position.y = y; scene.add(r);
+      tag(r, loreData.portal.world, loreData.portal.title, loreData.portal.text);
     });
 
     // ── UNDERWORLD ──────────────────────────────────────
     var UW = -18;
-    [[16,0.8,0x1a0e14],[13,0.7,0x140a10],[10,0.6,0x100810]].forEach(function(d,i){
+    // ground layers — near-black to dark gray
+    [[16,0.8,0x0a0a0a],[13,0.7,0x111111],[10,0.6,0x080808]].forEach(function(d,i){
       var layer = new THREE.Mesh(new THREE.CylinderGeometry(d[0]-i,d[0],d[1],10,1), fmf(d[2]));
       layer.position.y = UW-0.4-i*0.5; scene.add(layer);
     });
+    // flat ground plane — black
+    var uwGround = new THREE.Mesh(new THREE.CircleGeometry(16,14), fmf(0x0d0d0d));
+    uwGround.rotation.x=-Math.PI/2; uwGround.position.y=UW-0.02; scene.add(uwGround);
+
+    // water/void pool — dark mirror, bright white emissive shimmer
     var waterMat = new THREE.MeshPhongMaterial({
-      color:0x08102a, emissive:0x001a55, emissiveIntensity:1.0,
-      flatShading:true, shininess:120, transparent:true, opacity:0.9
+      color:0x111111, emissive:0xffffff, emissiveIntensity:0.08,
+      flatShading:true, shininess:200, transparent:true, opacity:0.95
     });
-    var waterMesh = new THREE.Mesh(new THREE.CircleGeometry(15,12), waterMat);
+    var waterMesh = new THREE.Mesh(new THREE.CircleGeometry(7,14), waterMat);
     waterMesh.rotation.x=-Math.PI/2; waterMesh.position.y=UW+0.05; scene.add(waterMesh);
+    tag(waterMesh, loreData.underworld.world, loreData.underworld.title, loreData.underworld.text);
 
-    var poolGlow = new THREE.Mesh(new THREE.CircleGeometry(3,10), bm(0x0033cc,0.55));
-    poolGlow.rotation.x=-Math.PI/2; poolGlow.position.y=UW+0.08; scene.add(poolGlow);
-
-    [[5,5],[-5,-3],[3,8],[-8,2],[6,-7]].forEach(function(p){
-      var em = new THREE.Mesh(new THREE.CircleGeometry(0.7,7), bm(0xff4400,0.85));
-      em.rotation.x=-Math.PI/2; em.position.set(p[0],UW+0.1,p[1]); scene.add(em);
-      var h2 = new THREE.Mesh(new THREE.CircleGeometry(1.5,7), bm(0xff2200,0.2));
-      h2.rotation.x=-Math.PI/2; h2.position.set(p[0],UW+0.09,p[1]); scene.add(h2);
+    // white cracks / seams in ground
+    [[5,4],[-5,-3],[3,8],[-7,2],[5,-7],[-3,6],[7,-3]].forEach(function(p){
+      var em = new THREE.Mesh(new THREE.CircleGeometry(0.45,7), bm(0xffffff,0.7));
+      em.rotation.x=-Math.PI/2; em.position.set(p[0],UW+0.08,p[1]); scene.add(em);
+      var halo = new THREE.Mesh(new THREE.CircleGeometry(1.0,7), bm(0xffffff,0.12));
+      halo.rotation.x=-Math.PI/2; halo.position.set(p[0],UW+0.07,p[1]); scene.add(halo);
     });
+
+    // horizon fog ring — pale white mist at edge
+    var horizonRing = new THREE.Mesh(new THREE.RingGeometry(13,17,32), new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.06,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide}));
+    horizonRing.rotation.x=-Math.PI/2; horizonRing.position.y=UW+0.1; scene.add(horizonRing);
+
+    // stone dome structures at perimeter — dark gray
+    [[0.4,13],[1.3,14],[2.2,12],[3.5,13],[4.8,14],[5.6,12]].forEach(function(d){
+      var dx=Math.cos(d[0])*d[1], dz=Math.sin(d[0])*d[1];
+      var dome=new THREE.Mesh(new THREE.SphereGeometry(1.4+Math.random()*0.6,8,6,0,Math.PI*2,0,Math.PI/2),fmf(0x222222));
+      dome.position.set(dx,UW+0.1,dz); scene.add(dome);
+      var domeGlow=new THREE.Mesh(new THREE.SphereGeometry(1.9,8,6,0,Math.PI*2,0,Math.PI/2),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.04,depthWrite:false,blending:THREE.AdditiveBlending}));
+      domeGlow.position.set(dx,UW+0.1,dz); scene.add(domeGlow);
+    });
+
+    // tall plants — black silhouettes
+    function makeUWPlant(px, pz, h) {
+      var stalk=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.10,h,5,1),fmf(0x111111));
+      stalk.position.set(px,UW+h/2,pz); scene.add(stalk);
+      for (var i=0; i<7; i++) {
+        var la=i/7*Math.PI*2;
+        var leaf=new THREE.Mesh(new THREE.ConeGeometry(0.22,1.8,4,1),fmf(0x181818));
+        leaf.rotation.z=Math.PI*0.38; leaf.rotation.y=la;
+        leaf.position.set(px+Math.cos(la)*0.85,UW+0.5,pz+Math.sin(la)*0.85); scene.add(leaf);
+      }
+      for (var i=0; i<5; i++) {
+        var fa=i/5*Math.PI*2, fr=0.28;
+        var fl=new THREE.Mesh(new THREE.SphereGeometry(0.16,5,4),fmf(i%2===0?0x333333:0x222222));
+        fl.position.set(px+Math.cos(fa)*fr,UW+h+0.2,pz+Math.sin(fa)*fr); scene.add(fl);
+      }
+    }
+    makeUWPlant(8, 4, 6.5);
+    makeUWPlant(-6, 7, 4.5);
+    makeUWPlant(4, -9, 5.0);
+
+    // dense low shrubs — dark gray lumps
+    for (var i=0; i<28; i++) {
+      var sa=i/28*Math.PI*2, sr=8+Math.random()*5;
+      var sx=Math.cos(sa)*sr, sz=Math.sin(sa)*sr;
+      var sh=0.4+Math.random()*0.6;
+      var shrub=new THREE.Mesh(new THREE.SphereGeometry(sh,5,4),fmf(i%2===0?0x1a1a1a:0x141414));
+      shrub.scale.y=0.5; shrub.position.set(sx,UW+sh*0.25,sz); scene.add(shrub);
+    }
+
+    // soul figure — white silhouette
+    var soulX=5, soulZ=2;
+    [[-0.12,0],[0.12,0]].forEach(function(l){
+      var leg=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.10,1.0,5,1),fmf(0xdddddd));
+      leg.position.set(soulX+l[0],UW+0.5,soulZ); scene.add(leg);
+    });
+    var torso=new THREE.Mesh(new THREE.BoxGeometry(0.38,0.7,0.26),fmf(0xeeeeee));
+    torso.position.set(soulX,UW+1.45,soulZ); scene.add(torso);
+    var head=new THREE.Mesh(new THREE.SphereGeometry(0.22,6,5),fmf(0xffffff));
+    head.position.set(soulX,UW+2.05,soulZ); scene.add(head);
+    var cloak=new THREE.Mesh(new THREE.ConeGeometry(0.32,1.1,5,1),fmf(0xcccccc));
+    cloak.position.set(soulX,UW+0.9,soulZ); scene.add(cloak);
+    var aura=new THREE.Mesh(new THREE.SphereGeometry(0.5,8,6),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.08,depthWrite:false,blending:THREE.AdditiveBlending}));
+    aura.position.set(soulX,UW+1.5,soulZ); scene.add(aura);
 
     // Roots — sweeping ribbon curves from trunk down to water
-    var ribbonCols=[0x3a4acc,0x2a6aaa,0x1a88aa,0x4a3aaa,0x226688,0x5a3a99,0x1a7799,0x3355bb,0x2a5599,0x446688];
+    var ribbonCols=[0x333333,0x444444,0x2a2a2a,0x3d3d3d,0x222222,0x555555,0x2f2f2f,0x383838,0x1e1e1e,0x424242];
     function makeRibbon(pts, col, w) {
       var curve=new THREE.CatmullRomCurve3(pts);
       var geo=new THREE.TubeGeometry(curve,40,w,3,false);
@@ -243,31 +469,32 @@
     // ── MIDDLE WORLD — HILLFORT ──────────────────────────
     var MW = 0;
     [0xc49058,0xd4a468,0xe0b478,0xeac488].forEach(function(c,i){
-      var r2 = 10+i*2.2;
+      var r2 = 12+i*2.2;
       var layer = new THREE.Mesh(new THREE.CylinderGeometry(r2,r2+2,0.55,14,1), fmf(c));
       layer.position.y = MW-0.28-i*0.45; scene.add(layer);
     });
-    var topterra = new THREE.Mesh(new THREE.CircleGeometry(10,14), fmf(0xc49058));
+    var topterra = new THREE.Mesh(new THREE.CircleGeometry(12,14), fmf(0xc49058));
     topterra.rotation.x=-Math.PI/2; topterra.position.y=MW+0.01; scene.add(topterra);
-    var ditch = new THREE.Mesh(new THREE.RingGeometry(9.2,10.8,14), fmf(0x8a5a30));
+    var ditch = new THREE.Mesh(new THREE.RingGeometry(11.0,12.8,14), fmf(0x8a5a30));
     ditch.rotation.x=-Math.PI/2; ditch.position.y=MW-0.04; scene.add(ditch);
 
-    var mound = new THREE.Mesh(new THREE.CylinderGeometry(6.0,9.0,4.5,10,1), fmf(0x60a030));
+    var mound = new THREE.Mesh(new THREE.CylinderGeometry(8.0,10.5,4.5,12,1), fmf(0x60a030));
     mound.position.y=MW+2.25; mound.castShadow=true; mound.receiveShadow=true; scene.add(mound);
-    var plat = new THREE.Mesh(new THREE.CircleGeometry(6.0,10), fmf(0x72b83a));
+    tag(mound, loreData.hillfort.world, loreData.hillfort.title, loreData.hillfort.text);
+    var plat = new THREE.Mesh(new THREE.CircleGeometry(8.0,12), fmf(0x72b83a));
     plat.rotation.x=-Math.PI/2; plat.position.y=MW+4.52; scene.add(plat);
 
     var pMat = fmf(0x9a6230);
-    for (var i=0; i<26; i++) {
-      var pa = i/26*Math.PI*2;
+    for (var i=0; i<32; i++) {
+      var pa = i/32*Math.PI*2;
       var post = new THREE.Mesh(new THREE.BoxGeometry(0.24,1.5,0.24), pMat);
-      post.position.set(Math.cos(pa)*5.8, MW+5.25, Math.sin(pa)*5.8); post.castShadow=true; scene.add(post);
+      post.position.set(Math.cos(pa)*7.6, MW+5.25, Math.sin(pa)*7.6); post.castShadow=true; scene.add(post);
     }
-    var railRing = new THREE.Mesh(new THREE.TorusGeometry(5.8,0.12,4,26), fmf(0x7a4820));
+    var railRing = new THREE.Mesh(new THREE.TorusGeometry(7.6,0.12,4,32), fmf(0x7a4820));
     railRing.rotation.x=Math.PI/2; railRing.position.y=MW+5.65; scene.add(railRing);
 
     [0,Math.PI*0.5,Math.PI,Math.PI*1.5].forEach(function(a){
-      var tx=Math.cos(a)*5.7, tz=Math.sin(a)*5.7, ty=MW+4.5;
+      var tx=Math.cos(a)*7.4, tz=Math.sin(a)*7.4, ty=MW+4.5;
       var base = new THREE.Mesh(new THREE.BoxGeometry(1.2,2.2,1.2), fmf(0xaa7038));
       base.position.set(tx,ty+1.1,tz); base.castShadow=true; scene.add(base);
       var roof = new THREE.Mesh(new THREE.ConeGeometry(1.0,1.0,4,1), fmf(0x7a4020));
@@ -276,27 +503,25 @@
 
     var gty = MW+4.5;
     var gbase = new THREE.Mesh(new THREE.BoxGeometry(2.0,2.8,1.4), fmf(0xba7840));
-    gbase.position.set(0,gty+1.4,5.7); gbase.castShadow=true; scene.add(gbase);
+    gbase.position.set(0,gty+1.4,7.5); gbase.castShadow=true; scene.add(gbase);
+    tag(gbase, loreData.gate.world, loreData.gate.title, loreData.gate.text);
     var groof = new THREE.Mesh(new THREE.ConeGeometry(1.3,1.3,4,1), fmf(0x7a4020));
-    groof.position.set(0,gty+3.35,5.7); groof.rotation.y=Math.PI/4; scene.add(groof);
+    groof.position.set(0,gty+3.35,7.5); groof.rotation.y=Math.PI/4; scene.add(groof);
     var garch = new THREE.Mesh(new THREE.BoxGeometry(0.8,1.0,0.4), fmf(0x221005));
-    garch.position.set(0,gty+0.5,5.18); scene.add(garch);
+    garch.position.set(0,gty+0.5,7.0); scene.add(garch);
 
     // Stairs — wide flat steps going from outer ground up the mound face
     var STEPS = 18;
     for (var i=0; i<STEPS; i++) {
       var t2 = i/(STEPS-1);
-      // angle sweeps slightly around the mound face
       var sa3 = 0.0 + t2*0.55;
-      // radius goes from outer base inward as we climb
-      var sr3 = 9.0 - t2*2.8;
+      var sr3 = 11.0 - t2*3.2;
       var stepY = MW + t2*4.5;
-      var stepW = 2.0 - t2*0.5;   // steps get slightly narrower near top
+      var stepW = 2.2 - t2*0.5;
       var rp = new THREE.Mesh(new THREE.BoxGeometry(stepW, 0.22, 0.75), fmf(i%2===0?0x9a6a38:0x8a5a28));
       rp.position.set(Math.sin(sa3)*sr3, stepY, Math.cos(sa3)*sr3);
       rp.rotation.y = -sa3;
       rp.castShadow = true; scene.add(rp);
-      // small riser face between steps
       if (i < STEPS-1) {
         var rh3 = 4.5/STEPS;
         var riser = new THREE.Mesh(new THREE.BoxGeometry(stepW, rh3, 0.18), fmf(0x7a4a20));
@@ -305,17 +530,109 @@
       }
     }
 
-    [[-2.5,0],[2.2,1.5],[-2.0,-1.2],[0.4,-2.8]].forEach(function(h){
-      var lw = new THREE.Mesh(new THREE.BoxGeometry(3.2,1.3,1.5), fmf(0xf0ddb0));
-      lw.position.set(h[0],MW+4.5+0.65,h[1]); lw.castShadow=true; lw.receiveShadow=true; scene.add(lw);
-      var lr = new THREE.Mesh(new THREE.CylinderGeometry(0.05,1.7,1.0,4,1), fmf(0xcc4a18));
-      lr.position.set(h[0],MW+4.5+1.8,h[1]); lr.rotation.y=Math.PI/4; scene.add(lr);
+    // Longhouses — ring + center layout like the reference
+    var plY = MW+4.5+0.65;
+    var longDefs = [
+      // [x, z, rotY, w, d]   outer ring near palisade
+      [ 6.0,  2.2, 0.4,  3.4, 1.4],
+      [ 2.4,  6.2, 1.1,  3.4, 1.4],
+      [-2.8,  6.0, 2.0,  3.0, 1.3],
+      [-6.0,  2.0, 2.5,  3.4, 1.4],
+      [-5.8, -2.8, 0.9,  3.0, 1.3],
+      [-2.4, -6.2, 0.3,  3.4, 1.4],
+      [ 2.8, -5.8, 5.8,  3.0, 1.3],
+      [ 6.2, -1.8, 5.2,  3.4, 1.4],
+      // mid ring — clear of the fire circle (radius ~3.5)
+      [-3.8,  1.5, 0.6,  2.8, 1.2],
+      [ 1.6, -3.6, 2.2,  2.6, 1.2],
+      [ 3.5,  2.8, 5.0,  2.8, 1.2],
+      [-1.8,  3.8, 1.8,  2.6, 1.2],
+    ];
+    longDefs.forEach(function(h,hi){
+      var lw = new THREE.Mesh(new THREE.BoxGeometry(h[3],1.3,h[4]), fmf(0xf0ddb0));
+      lw.position.set(h[0],plY,h[1]); lw.rotation.y=h[2]; lw.castShadow=true; lw.receiveShadow=true; scene.add(lw);
+      if (hi===0) tag(lw, loreData.longhouse.world, loreData.longhouse.title, loreData.longhouse.text);
+      var lr = new THREE.Mesh(new THREE.CylinderGeometry(0.05,h[4]*1.15,1.0,4,1), fmf(0xcc4a18));
+      lr.position.set(h[0],plY+1.15,h[1]); lr.rotation.y=h[2]+Math.PI/4; scene.add(lr);
     });
 
-    var fp2 = new THREE.Mesh(new THREE.CircleGeometry(0.5,6), bm(0xff6600,0.9));
-    fp2.rotation.x=-Math.PI/2; fp2.position.set(0,MW+4.55,0); scene.add(fp2);
+    // White tents
+    var tentMat = fmf(0xf5f0e8);
+    var tentPositions = [
+      [3.5, 3.8],[-3.2, 3.0],[4.2,-3.5],[-4.0,-3.2],[0.8, 4.5],[-1.0,-4.2],[4.8, 0.5],[-5.0, 0.0]
+    ];
+    tentPositions.forEach(function(p){
+      var tc = new THREE.Mesh(new THREE.ConeGeometry(0.75,1.6,4,1), tentMat);
+      tc.position.set(p[0], plY+0.8, p[1]); tc.rotation.y=Math.PI/4; tc.castShadow=true; scene.add(tc);
+      var tb = new THREE.Mesh(new THREE.CylinderGeometry(0.75,0.75,0.25,4,1), fmf(0xe8e0d0));
+      tb.position.set(p[0], plY+0.12, p[1]); tb.rotation.y=Math.PI/4; scene.add(tb);
+    });
 
-    [[-13,2],[13,-3],[-11,-7],[10,7],[3,13],[-3,-13],[14,4],[-14,-2],[7,-12],[-7,11],[11,11],[-12,-10]].forEach(function(p){
+    // Central campfire
+    var fireBase = MW+4.52;
+    // white sand circle around the ritual fire
+    var sandRing = new THREE.Mesh(new THREE.RingGeometry(1.2, 2.6, 32), fmf(0xe8e0cc));
+    sandRing.rotation.x=-Math.PI/2; sandRing.position.y=fireBase+0.02; scene.add(sandRing);
+    // large stone circle — varied sizes like the reference
+    var stoneColors=[0x6a5a4a,0x5a4a3a,0x7a6a58,0x4a3a2e,0x6e5e4c];
+    for (var i=0; i<18; i++) {
+      var sa=i/18*Math.PI*2;
+      var sw=0.25+Math.random()*0.25, sh=0.18+Math.random()*0.18, sd=0.2+Math.random()*0.15;
+      var fs=new THREE.Mesh(new THREE.BoxGeometry(sw,sh,sd),fmf(stoneColors[i%stoneColors.length]));
+      fs.rotation.y=Math.random()*Math.PI;
+      fs.position.set(Math.cos(sa)*2.0,fireBase+sh/2,Math.sin(sa)*2.0); scene.add(fs);
+    }
+    // inner stones tighter
+    for (var i=0; i<10; i++) {
+      var sa=i/10*Math.PI*2+0.3;
+      var sw=0.18+Math.random()*0.15, sh=0.14+Math.random()*0.1;
+      var fs2=new THREE.Mesh(new THREE.BoxGeometry(sw,sh,sw*0.8),fmf(stoneColors[i%stoneColors.length]));
+      fs2.rotation.y=Math.random()*Math.PI;
+      fs2.position.set(Math.cos(sa)*1.1,fireBase+sh/2,Math.sin(sa)*1.1); scene.add(fs2);
+    }
+    // logs radiating outward
+    for (var i=0; i<6; i++) {
+      var la=i/6*Math.PI*2;
+      var log=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.1,1.4,6,1),fmf(0x3a2010));
+      log.rotation.z=Math.PI/2; log.rotation.y=la;
+      log.position.set(Math.cos(la)*0.4,fireBase+0.12,Math.sin(la)*0.4); scene.add(log);
+    }
+    // ember glow disk
+    var ember=new THREE.Mesh(new THREE.CircleGeometry(0.5,10),bm(0xff4400,0.95));
+    ember.rotation.x=-Math.PI/2; ember.position.set(0,fireBase+0.18,0); scene.add(ember);
+    // tall layered flames — central bonfire scale
+    var flameDefs=[
+      [0,    0,    0.38, 2.2, 0xff4400],
+      [0.1,  0.12, 0.28, 1.7, 0xff7700],
+      [-0.15,0.08, 0.24, 1.8, 0xff9900],
+      [0.08,-0.14, 0.20, 1.5, 0xffcc00],
+      [-0.06,0.06, 0.16, 1.2, 0xffee44],
+      [0,    0,    0.10, 0.9, 0xffffff]
+    ];
+    flameDefs.forEach(function(f){
+      var fl=new THREE.Mesh(new THREE.ConeGeometry(f[2],f[3],5,1),bm(f[4],0.88));
+      fl.position.set(f[0],fireBase+f[3]/2+0.2,f[1]); scene.add(fl);
+    });
+    // two point lights — orange base + pale yellow tip
+    var mwFireL=new THREE.PointLight(0xff6600,4.0,18); mwFireL.position.set(0,fireBase+1.2,0); scene.add(mwFireL);
+    var mwFireL2=new THREE.PointLight(0xffaa44,2.0,10); mwFireL2.position.set(0,fireBase+2.5,0); scene.add(mwFireL2);
+    // smoke particles
+    var smokeCount=80;
+    var smokePts=[];
+    for (var i=0; i<smokeCount; i++) smokePts.push(0,0,0);
+    var smokeBuf=new THREE.BufferGeometry();
+    var smokePosAttr=new THREE.Float32BufferAttribute(smokePts,3);
+    smokeBuf.setAttribute('position',smokePosAttr);
+    var smokePhase=[]; var smokeOff=[];
+    for (var i=0; i<smokeCount; i++) {
+      smokePhase.push(Math.random()*Math.PI*2);
+      smokeOff.push((Math.random()-0.5)*0.5,(Math.random()-0.5)*0.5);
+    }
+    var smokeMesh=new THREE.Points(smokeBuf,new THREE.PointsMaterial({color:0xbbbbbb,size:0.38,transparent:true,opacity:0.32,depthWrite:false}));
+    scene.add(smokeMesh);
+
+    // trees — positions inside the lake arc removed
+    [[-13,2],[-11,-7],[-3,-13],[-14,-2],[-12,-10]].forEach(function(p){
       var tk = new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.2,0.8,5,1), fmf(0x6a4018));
       tk.position.set(p[0],MW+0.4,p[1]); scene.add(tk);
       var t1 = new THREE.Mesh(new THREE.ConeGeometry(1.0,2.6,6,1), fmf(0x2a6820));
@@ -324,19 +641,211 @@
       t2.position.set(p[0],MW+3.3,p[1]); scene.add(t2);
     });
 
-    [[-12,4],[12,-4],[-10,-8],[10,8],[4,-13],[-4,13],[-14,8],[14,-9]].forEach(function(p){
+    // outer buildings — positions inside the lake arc removed
+    [[-12,4],[-10,-8],[-14,8]].forEach(function(p){
       var ob = new THREE.Mesh(new THREE.BoxGeometry(1.8,1.0,1.4), fmf(0xecd4a0));
       ob.position.set(p[0],MW+0.5,p[1]); ob.castShadow=true; scene.add(ob);
       var or2 = new THREE.Mesh(new THREE.ConeGeometry(1.3,0.9,4,1), fmf(0xc44a18));
       or2.position.set(p[0],MW+1.45,p[1]); or2.rotation.y=Math.PI/4; scene.add(or2);
     });
 
-    var riverMat = new THREE.MeshPhongMaterial({color:0x5a9ab8,emissive:0x1a4466,emissiveIntensity:0.4,flatShading:true,shininess:80});
-    for (var i=0; i<8; i++) {
-      var rseg = new THREE.Mesh(new THREE.PlaneGeometry(2.0,2.6), riverMat);
-      rseg.rotation.x=-Math.PI/2; rseg.rotation.z=i*0.15;
-      rseg.position.set(13-i*1.5, MW+0.04, -12+i*2.5); scene.add(rseg);
+    // ── LAKE — crescent wrapping around front-right of mound
+    function makeArcShape(innerR, outerR, startA, endA, steps) {
+      var sh = new THREE.Shape();
+      sh.moveTo(Math.cos(startA)*outerR, Math.sin(startA)*outerR);
+      for (var i=1; i<=steps; i++) {
+        var a = startA+(endA-startA)*i/steps;
+        sh.lineTo(Math.cos(a)*outerR, Math.sin(a)*outerR);
+      }
+      for (var i=steps; i>=0; i--) {
+        var a = startA+(endA-startA)*i/steps;
+        sh.lineTo(Math.cos(a)*innerR, Math.sin(a)*innerR);
+      }
+      sh.closePath();
+      return sh;
     }
+    var arcStart = -0.3, arcEnd = 2.1, arcSteps = 28;
+    // muddy shore band
+    var shoreGeo = new THREE.ShapeGeometry(makeArcShape(11.5, 19.5, arcStart, arcEnd, arcSteps));
+    var shoreMesh = new THREE.Mesh(shoreGeo, fmf(0x8a7050));
+    shoreMesh.rotation.x=-Math.PI/2; shoreMesh.position.y=MW-0.05; scene.add(shoreMesh);
+    // sandy bank
+    var bankGeo = new THREE.ShapeGeometry(makeArcShape(12.0, 18.5, arcStart, arcEnd, arcSteps));
+    var bankMesh = new THREE.Mesh(bankGeo, fmf(0xc8aa70));
+    bankMesh.rotation.x=-Math.PI/2; bankMesh.position.y=MW-0.03; scene.add(bankMesh);
+    // water
+    var lakeMat = new THREE.MeshPhongMaterial({color:0x2a6080,emissive:0x0a2840,emissiveIntensity:0.6,flatShading:true,shininess:130,transparent:true,opacity:0.90});
+    var waterGeo = new THREE.ShapeGeometry(makeArcShape(12.8, 17.6, arcStart, arcEnd, arcSteps));
+    var lakeMesh = new THREE.Mesh(waterGeo, lakeMat);
+    lakeMesh.rotation.x=-Math.PI/2; lakeMesh.position.y=MW-0.01; scene.add(lakeMesh);
+    // subtle specular shimmer — tiny points, not polygons
+    var shimPts=[];
+    for (var i=0; i<120; i++) {
+      var sa2=arcStart+(arcEnd-arcStart)*Math.random();
+      var sr2=13.0+Math.random()*4.2;
+      shimPts.push(Math.cos(sa2)*sr2, MW+0.02, Math.sin(sa2)*sr2);
+    }
+    var shimBuf=new THREE.BufferGeometry();
+    shimBuf.setAttribute('position',new THREE.Float32BufferAttribute(shimPts,3));
+    scene.add(new THREE.Points(shimBuf,new THREE.PointsMaterial({color:0xaaddff,size:0.12,transparent:true,opacity:0.55,depthWrite:false})));
+    // reeds along both edges of the arc
+    for (var i=0; i<32; i++) {
+      var ra = arcStart+(arcEnd-arcStart)*i/32+Math.random()*0.05;
+      var edge = Math.random()<0.5 ? 12.5+Math.random()*0.6 : 17.2+Math.random()*0.6;
+      var rx=Math.cos(ra)*edge, rz=Math.sin(ra)*edge;
+      var rh=0.5+Math.random()*0.7;
+      var reed=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.05,rh,4,1),fmf(0x5a7830));
+      reed.position.set(rx,MW+rh/2,rz); scene.add(reed);
+      var rtip=new THREE.Mesh(new THREE.CylinderGeometry(0.055,0.04,0.24,4,1),fmf(0x3a2010));
+      rtip.position.set(rx,MW+rh+0.12,rz); scene.add(rtip);
+    }
+    // small dock at midpoint of arc
+    var dockA = (arcStart+arcEnd)/2;
+    var dockR = 12.2;
+    var dockX=Math.cos(dockA)*dockR, dockZ=Math.sin(dockA)*dockR;
+    for (var i=0; i<5; i++) {
+      var plank=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.1,1.0),fmf(0x6a4018));
+      plank.rotation.y=dockA; plank.castShadow=true;
+      plank.position.set(dockX+Math.cos(dockA)*i*0.8, MW+0.06, dockZ+Math.sin(dockA)*i*0.8);
+      scene.add(plank);
+    }
+    [0.3,-0.3].forEach(function(side){
+      var dp=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.08,0.9,5,1),fmf(0x4a2c0a));
+      dp.position.set(dockX+Math.cos(dockA)*2+Math.sin(dockA)*side, MW+0.45, dockZ+Math.sin(dockA)*2-Math.cos(dockA)*side);
+      scene.add(dp);
+    });
+    // light reflecting off water
+    var lakeL=new THREE.PointLight(0x1a5588,2.0,22);
+    lakeL.position.set(Math.cos((arcStart+arcEnd)/2)*15, MW+1.5, Math.sin((arcStart+arcEnd)/2)*15);
+    scene.add(lakeL);
+
+    // ── LAKE CONTENTS ────────────────────────────────────
+    // simple wooden boat — midpoint of arc, radius 15
+
+    var boatA = -0.65;
+    var boatR = 14.5;
+    var bx = Math.cos(boatA)*boatR, bz = Math.sin(boatA)*boatR;
+    var boatY = MW+0.12;
+    // hull — low flat box
+    var hull = new THREE.Mesh(new THREE.BoxGeometry(0.7,0.35,2.4), fmf(0x7a4820));
+    hull.position.set(bx,boatY,bz); hull.rotation.y=boatA+Math.PI/2; hull.castShadow=true; scene.add(hull);
+    // bow wedge
+    var bow = new THREE.Mesh(new THREE.ConeGeometry(0.36,0.7,4,1), fmf(0x6a3c14));
+    bow.rotation.z=Math.PI/2; bow.rotation.y=boatA;
+    bow.position.set(bx+Math.sin(boatA+Math.PI/2)*1.1, boatY+0.05, bz+Math.cos(boatA+Math.PI/2)*1.1);
+    bow.rotation.y=boatA+Math.PI/2; scene.add(bow);
+    // stern wedge
+    var stern = new THREE.Mesh(new THREE.ConeGeometry(0.30,0.5,4,1), fmf(0x6a3c14));
+    stern.rotation.z=-Math.PI/2;
+    stern.position.set(bx-Math.sin(boatA+Math.PI/2)*1.1, boatY+0.05, bz-Math.cos(boatA+Math.PI/2)*1.1);
+    stern.rotation.y=boatA+Math.PI/2; scene.add(stern);
+    // mast
+    var mast = new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.05,1.8,5,1), fmf(0x5a3010));
+    mast.position.set(bx,boatY+1.0,bz); scene.add(mast);
+    // sail — simple flat plane angled on the mast
+    var sail = new THREE.Mesh(new THREE.PlaneGeometry(1.1,1.3), fmf(0xf0e8d0));
+    sail.position.set(bx+0.3,boatY+1.35,bz); sail.rotation.y=boatA+0.3; scene.add(sail);
+
+    // lily pads — small, dark green, round enough to not read as polygons
+    var lilyDefs=[
+      [0.25,14.2],[0.65,16.1],[0.95,14.8],[1.35,15.5],[1.65,13.8],[1.05,16.5]
+    ];
+    lilyDefs.forEach(function(ld){
+      var lpx=Math.cos(ld[0])*ld[1], lpz=Math.sin(ld[0])*ld[1];
+      var pad=new THREE.Mesh(new THREE.CircleGeometry(0.22+Math.random()*0.10,16),
+        new THREE.MeshPhongMaterial({color:0x2a5c1e,flatShading:false}));
+      pad.rotation.x=-Math.PI/2; pad.position.set(lpx,MW+0.03,lpz); scene.add(pad);
+      if (Math.random()>0.5) {
+        var flower=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.06,0.08,8,1),
+          new THREE.MeshPhongMaterial({color:0xf0d8a0,flatShading:false}));
+        flower.position.set(lpx,MW+0.07,lpz); scene.add(flower);
+      }
+    });
+
+    // heron / bird — standing at shore, one side of lake
+    var birdA = arcStart+0.25, birdR = 12.6;
+    var bdx=Math.cos(birdA)*birdR, bdz=Math.sin(birdA)*birdR;
+    // legs
+    [0.08,-0.08].forEach(function(off){
+      var leg=new THREE.Mesh(new THREE.CylinderGeometry(0.025,0.025,0.55,4,1),fmf(0xccaa80));
+      leg.position.set(bdx+off,MW+0.27,bdz); scene.add(leg);
+    });
+    // body
+    var body=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.28,0.38),fmf(0xddd0c0));
+    body.position.set(bdx,MW+0.72,bdz); scene.add(body);
+    // neck
+    var neck=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.08,0.38,5,1),fmf(0xddd0c0));
+    neck.position.set(bdx,MW+1.02,bdz+0.10); neck.rotation.x=-0.3; scene.add(neck);
+    // head
+    var bhead=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.12,0.18),fmf(0x888070));
+    bhead.position.set(bdx,MW+1.24,bdz+0.22); scene.add(bhead);
+    // beak
+    var beak=new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.03,0.26,4,1),fmf(0xddaa40));
+    beak.rotation.x=Math.PI/2; beak.position.set(bdx,MW+1.22,bdz+0.36); scene.add(beak);
+
+    // ── COMPASS — billboard sprites floating at terrain edge ─
+    function makeCompassSprite(label) {
+      var cv=document.createElement('canvas'); cv.width=128; cv.height=128;
+      var ctx=cv.getContext('2d');
+      // pill background
+      ctx.fillStyle='rgba(10,14,22,0.72)';
+      ctx.beginPath(); ctx.roundRect(8,32,112,64,20); ctx.fill();
+      ctx.strokeStyle='rgba(255,220,100,0.5)'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.roundRect(8,32,112,64,20); ctx.stroke();
+      // label text
+      ctx.fillStyle='rgba(255,220,100,0.95)';
+      ctx.font='bold 44px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(label,64,64);
+      var tex=new THREE.CanvasTexture(cv);
+      var mat=new THREE.SpriteMaterial({map:tex,transparent:true,depthWrite:false});
+      var sp=new THREE.Sprite(mat); sp.scale.set(3.5,3.5,1);
+      return sp;
+    }
+    var cR=19, cY=MW+3;
+    [['N',0,-cR],['S',0,cR],['E',cR,0],['W',-cR,0]].forEach(function(d){
+      var sp=makeCompassSprite(d[0]);
+      sp.position.set(d[1],cY,d[2]); scene.add(sp);
+    });
+
+    // ── TOTEMS — 2 tall carved posts outside the village ─
+    // scale: overall height multiplier, girth: radius multiplier
+    function makeTotem(tx, ty, tz, postCol, faceCol, facingAngle, scale, girth) {
+      var s=scale||1.0, g=girth||1.0;
+      var tstone = new THREE.Mesh(new THREE.BoxGeometry(0.6*g,0.3,0.5*g), fmf(0x332211));
+      tstone.position.set(tx, ty+0.15, tz); scene.add(tstone);
+      var h1=4.5*s, h2=2.5*s, r1=0.15*g, r2=0.20*g;
+      var shaft1 = new THREE.Mesh(new THREE.CylinderGeometry(r1,r2,h1,7,1), fmf(postCol));
+      shaft1.position.set(tx, ty+h1/2+0.3, tz); shaft1.castShadow=true; scene.add(shaft1);
+      var shaft2 = new THREE.Mesh(new THREE.CylinderGeometry(r1*0.7,r1,h2,7,1), fmf(postCol));
+      shaft2.position.set(tx, ty+h1+0.3+h2/2, tz); shaft2.castShadow=true; scene.add(shaft2);
+      var faceY = ty+h1+h2+0.3;
+      var fw=0.36*g, fh=0.55*s, fd=0.28*g;
+      var face = new THREE.Mesh(new THREE.BoxGeometry(fw,fh,fd), fmf(faceCol));
+      face.position.set(tx, faceY+fh/2, tz); face.rotation.y=facingAngle; scene.add(face);
+      var brow = new THREE.Mesh(new THREE.BoxGeometry(fw+0.06,0.10,0.12*g), fmf(postCol));
+      brow.position.set(tx, faceY+fh+0.02, tz); brow.rotation.y=facingAngle; scene.add(brow);
+      [-0.1*g, 0.1*g].forEach(function(side) {
+        var ex=Math.cos(facingAngle)*side, ez=-Math.sin(facingAngle)*side;
+        var eye = new THREE.Mesh(new THREE.BoxGeometry(0.09*g,0.07,0.06), fmf(0x0d0a06));
+        eye.position.set(tx+ex, faceY+fh*0.55, tz+ez+Math.cos(facingAngle)*fd*0.45);
+        eye.rotation.y=facingAngle; scene.add(eye);
+      });
+      var nose = new THREE.Mesh(new THREE.BoxGeometry(0.05*g,0.16*s,0.09*g), fmf(postCol));
+      nose.position.set(tx, faceY+fh*0.3, tz+Math.cos(facingAngle)*fd*0.46);
+      nose.rotation.y=facingAngle; scene.add(nose);
+      // notches spaced along shaft
+      [0.18,0.35,0.55].forEach(function(t) {
+        var notch = new THREE.Mesh(new THREE.BoxGeometry(0.30*g,0.07,0.05), fmf(0x180e04));
+        notch.position.set(tx, ty+h1*t+0.3, tz+Math.cos(facingAngle)*r2*1.05);
+        notch.rotation.y=facingAngle; scene.add(notch);
+      });
+      var cap = new THREE.Mesh(new THREE.BoxGeometry(0.26*g,0.16,0.20*g), fmf(postCol));
+      cap.position.set(tx, faceY+fh+0.14, tz); scene.add(cap);
+    }
+    // Perkūnas — very dark charred oak, tall and imposing
+    makeTotem(-13.5, MW, 6.0,  0x140c04, 0x2c1a08, Math.PI*0.15, 1.35, 1.1);
+    // Saule — pale honey birch, shorter and slender
+    makeTotem( 12.0, MW, 8.5,  0xc8a060, 0xe8c888, Math.PI*1.85, 0.80, 0.8);
 
     // ── UPPER WORLD — TREE CROWN ─────────────────────────
     var SW = 18;
@@ -386,6 +895,7 @@
     canopyDef.forEach(function(b,i){
       var s=new THREE.Mesh(new THREE.SphereGeometry(b[3],6,5),fmf(leafCols[i%8]));
       s.position.set(b[0],b[1],b[2]); s.castShadow=true; scene.add(s);
+      if (i===0) tag(s, loreData.canopy.world, loreData.canopy.title, loreData.canopy.text);
     });
 
     // Houses nestled IN the canopy — sitting on branch forks
@@ -435,6 +945,48 @@
     var sg=new THREE.BufferGeometry();
     sg.setAttribute('position',new THREE.Float32BufferAttribute(sp,3));
     scene.add(new THREE.Points(sg,new THREE.PointsMaterial({color:0xffd700,size:0.3})));
+
+    window.closeLore = function() {
+      document.getElementById('lore-panel').classList.remove('visible');
+    };
+
+    function showLore(lore) {
+      document.getElementById('lore-world').textContent = lore.world;
+      document.getElementById('lore-title').textContent = lore.title;
+      document.getElementById('lore-text').innerHTML = lore.text.replace(/\n\n/g,'<br><br>');
+      document.getElementById('lore-panel').classList.add('visible');
+    }
+
+    var raycaster = new THREE.Raycaster();
+    var mouse2d = new THREE.Vector2();
+
+    var hoverTag = document.getElementById('hover-tag');
+    rend.domElement.addEventListener('mousemove', function(e) {
+      if (walkMode) { hoverTag.style.display='none'; return; }
+      mouse2d.x =  (e.clientX / W) * 2 - 1;
+      mouse2d.y = -(e.clientY / H) * 2 + 1;
+      raycaster.setFromCamera(mouse2d, cam);
+      var hits = raycaster.intersectObjects(clickables, false);
+      if (hits.length > 0) {
+        hoverTag.textContent = hits[0].object.userData.lore.title;
+        hoverTag.style.display = 'block';
+        hoverTag.style.left = e.clientX + 'px';
+        hoverTag.style.top  = e.clientY + 'px';
+        rend.domElement.style.cursor = 'pointer';
+      } else {
+        hoverTag.style.display = 'none';
+        rend.domElement.style.cursor = '';
+      }
+    });
+
+    rend.domElement.addEventListener('click', function(e) {
+      if (walkMode) return;
+      mouse2d.x =  (e.clientX / W) * 2 - 1;
+      mouse2d.y = -(e.clientY / H) * 2 + 1;
+      raycaster.setFromCamera(mouse2d, cam);
+      var hits = raycaster.intersectObjects(clickables, false);
+      if (hits.length > 0) showLore(hits[0].object.userData.lore);
+    });
 
     // ── WALK MODE ───────────────────────────────────────
     var walkMode = false;
@@ -514,16 +1066,16 @@
       if (keys['KeyD']||keys['ArrowRight']) walkPos.addScaledVector(right,  speed);
       // clamp to island boundary
       var flatDist = Math.sqrt(walkPos.x*walkPos.x + walkPos.z*walkPos.z);
-      if (flatDist > 13) { walkPos.x *= 13/flatDist; walkPos.z *= 13/flatDist; flatDist = 13; }
+      if (flatDist > 15) { walkPos.x *= 15/flatDist; walkPos.z *= 15/flatDist; flatDist = 15; }
 
       // ground height follows mound cone: base r=9 y=0, top r=6 y=4.5, plateau inside r=6
       var groundY;
-      if (flatDist <= 6.0) {
+      if (flatDist <= 8.0) {
         groundY = MW + 4.5;
-      } else if (flatDist >= 9.2) {
+      } else if (flatDist >= 10.8) {
         groundY = MW;
       } else {
-        groundY = MW + 4.5 * (9.2 - flatDist) / (9.2 - 6.0);
+        groundY = MW + 4.5 * (10.8 - flatDist) / (10.8 - 8.0);
       }
       walkPos.y = groundY + 0.5;
       cam.position.copy(walkPos);
@@ -584,6 +1136,20 @@
       eL1.intensity    = 1.3 + 0.6*Math.sin(t*2.1);
       eL2.intensity    = 1.0 + 0.4*Math.sin(t*1.8+0.7);
       fpL.intensity    = 2.0 + 0.7*Math.sin(t*2.8);
+      mwFireL.intensity  = 3.5 + 1.2*Math.sin(t*3.1+0.4);
+      mwFireL2.intensity = 1.5 + 0.8*Math.sin(t*2.7+1.1);
+      // animate smoke rising
+      var sp=smokePosAttr.array;
+      for (var si=0; si<smokeCount; si++) {
+        var ph2=smokePhase[si]; var life=(t*0.4+ph2)%(Math.PI*2);
+        var rise=life/(Math.PI*2)*5.5;
+        var spread=rise*0.25;
+        sp[si*3]   = smokeOff[si*2]   + Math.sin(t*0.9+ph2)*spread;
+        sp[si*3+1] = fireBase+0.5+rise;
+        sp[si*3+2] = smokeOff[si*2+1] + Math.cos(t*0.7+ph2)*spread;
+      }
+      smokePosAttr.needsUpdate=true;
+      smokeMesh.material.opacity=0.28+0.07*Math.sin(t*0.5);
       waterMat.emissiveIntensity = 0.8 + 0.3*Math.sin(t*0.7);
       uwMistMat.opacity = 0.3 + 0.1*Math.sin(t*0.9);
       rend.render(scene, cam);
