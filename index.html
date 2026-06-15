@@ -1181,22 +1181,39 @@
     makeDiscCloud( -1, SW+8,  -13, 0.95, frags2.slice(0,6));
 
     // Nine branches holding nine celestial bodies
-    // [tipX,tipY,tipZ, color, scale, type, name,  originX,originY,originZ]
-    // origins are the 80%-tip of the nearest skyBranch so sticks connect to the tree
+    // [tipX,tipY,tipZ, color, scale, type, name, originX,originY,originZ, description]
     var celestials = [
-      [ 8,  SW+16,  4,  0xffd700, 1.10, 1, 'Saule',           8,    SW+6.6,  4   ],
-      [-11, SW+16,  2,  0xe8e0c0, 0.85, 2, 'Meness',         -11.8, SW+6.8,  6.2 ],
-      [  5, SW+15, 10,  0xa0d8ff, 0.60, 0, 'Auseklis',        1.6,  SW+5.8,  9.6 ],
-      [ -6, SW+14,-10,  0xffcc66, 0.55, 0, 'Vakarzvaigzne',  -4.8,  SW+5.8, -7.2 ],
-      [ 11, SW+14, -5,  0xdaa520, 0.65, 0, 'Dievas',          9.6,  SW+5.8, -1.6 ],
-      [-12, SW+14, -2,  0xdd4422, 0.60, 0, 'Perkons',        -9.6,  SW+5.8, -0.8 ],
-      [  6, SW+14, -9,  0xffaabb, 0.50, 0, 'Laima',           4,    SW+5.8, -8   ],
-      [ -4, SW+13, 12,  0x44aaaa, 0.50, 0, 'Velnias',         1.6,  SW+5.8,  9.6 ],
-      [  3, SW+17,  6,  0xf0f8ff, 0.75, 0, 'Saulutė',         0,    SW+7,    0   ],
+      [ 8,  SW+16,  4,  0xffd700, 1.10, 1, 'Saulė',
+        8,    SW+6.6,  4,
+        'Goddess of the sun, fertility, and well-being. A protective mother figure who warms the earth and travels the sky in a copper chariot. She is one of the most beloved deities in Baltic belief.' ],
+      [-11, SW+16,  2,  0xe8e0c0, 0.85, 2, 'Mēness',
+        -11.8, SW+6.8, 6.2,
+        'God of the moon. Closely bound to farming cycles, he was believed to impart strength to all growing things. He is frequently associated with warfare and the marking of time.' ],
+      [  5, SW+15, 10,  0xa0d8ff, 0.60, 0, 'Auseklis',
+        1.6,  SW+5.8,  9.6,
+        'The Morning Star — herald of dawn and light. In Baltic tradition Auseklis shines as the first light before Saulė rises, guiding travellers and blessing the day ahead.' ],
+      [ -6, SW+14,-10,  0xffcc66, 0.55, 0, 'Vakarzvaigzne',
+        -4.8,  SW+5.8, -7.2,
+        'The Evening Star — the last light as Saulė descends. A companion to the sun on her nightly journey, marking the threshold between day and the world of darkness.' ],
+      [ 11, SW+14, -5,  0xdaa520, 0.65, 0, 'Dievs',
+        9.6,  SW+5.8, -1.6,
+        'The supreme sky god and personification of the bright heavens. He represents the creator and the overarching transcendent reality — the source of cosmic order and divine law.' ],
+      [-12, SW+14, -2,  0xdd4422, 0.60, 0, 'Pērkons',
+        -9.6,  SW+5.8, -0.8,
+        'God of thunder, sky, storms, and fire — the enforcer of cosmic order and justice. He rides a goat-drawn chariot and carries an axe. Heavily associated with the oak tree, he wages eternal war against Velnias.' ],
+      [  6, SW+14, -9,  0xffaabb, 0.50, 0, 'Laima',
+        4,    SW+5.8, -8,
+        'Goddess of fate, luck, and fortune. At the birth of every child she dictates their destiny. Her decisions are final — even the other gods cannot overturn what Laima has decreed.' ],
+      [ -4, SW+13, 12,  0x44aaaa, 0.50, 0, 'Velnias',
+        1.6,  SW+5.8,  9.6,
+        'God of the underworld, cattle, and the dead. He dwells among the roots of the World Tree and stands in eternal opposition to Pērkons. Guardian of ancestors and keeper of the boundary between the living and the dead.' ],
+      [  3, SW+17,  6,  0xf0f8ff, 0.75, 0, 'Saulutė',
+        0,    SW+7,    0,
+        'The Little Sun — a celestial spark at the crown of the World Tree. In folk tradition she represents the undying seed of light that persists through the longest winter night.' ],
     ];
     celestials.forEach(function(c){
       var cx=c[0], cy=c[1], cz=c[2], col=c[3], sc=c[4], type=c[5], cname=c[6];
-      var bx=c[7], by=c[8], bz=c[9]; // origin at nearest tree branch tip
+      var bx=c[7], by=c[8], bz=c[9], cdesc=c[10]; // origin at nearest tree branch tip
       var dx=cx-bx,dy=cy-by,dz=cz-bz, fullLen=Math.sqrt(dx*dx+dy*dy+dz*dz);
       var nx=dx/fullLen,ny=dy/fullLen,nz=dz/fullLen;
       var ex=cx-nx*sc*0.9, ey=cy-ny*sc*0.9, ez=cz-nz*sc*0.9; // end inside sphere
@@ -1215,7 +1232,7 @@
         var sunM=new THREE.MeshPhongMaterial({color:0xffee44,emissive:0xffcc00,emissiveIntensity:0.9,flatShading:false});
         var sun=new THREE.Mesh(new THREE.SphereGeometry(sc,10,8),sunM);
         sun.position.set(cx,cy,cz); scene.add(sun);
-        tag(sun, 'Sky World — Dangus', cname, '');
+        tag(sun, 'Sky World — Dangus', cname, cdesc);
         var rM=new THREE.MeshPhongMaterial({color:0xffdd00,emissive:0xffaa00,emissiveIntensity:0.6,flatShading:false});
         var ring=new THREE.Mesh(new THREE.TorusGeometry(sc*1.5,sc*0.18,6,24),rM);
         ring.position.set(cx,cy,cz); ring.rotation.x=Math.PI/3; scene.add(ring);
@@ -1225,14 +1242,14 @@
         var monM=new THREE.MeshPhongMaterial({color:col,emissive:col,emissiveIntensity:0.3,flatShading:true});
         var moon=new THREE.Mesh(new THREE.SphereGeometry(sc,8,6),monM);
         moon.position.set(cx,cy,cz); scene.add(moon);
-        tag(moon, 'Sky World — Dangus', cname, '');
+        tag(moon, 'Sky World — Dangus', cname, cdesc);
         var pL2=new THREE.PointLight(0xd0e8ff,0.5,18); pL2.position.set(cx,cy,cz); scene.add(pL2);
       } else {
         // Star/planet: glowing sphere
         var stM=new THREE.MeshPhongMaterial({color:col,emissive:col,emissiveIntensity:0.7,flatShading:false});
         var star=new THREE.Mesh(new THREE.SphereGeometry(sc,8,6),stM);
         star.position.set(cx,cy,cz); scene.add(star);
-        tag(star, 'Sky World — Dangus', cname, '');
+        tag(star, 'Sky World — Dangus', cname, cdesc);
         if(sc>0.65){ var pL3=new THREE.PointLight(col,0.6,14); pL3.position.set(cx,cy,cz); scene.add(pL3); }
       }
     });
