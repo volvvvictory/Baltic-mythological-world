@@ -619,7 +619,7 @@
       var tfire=new THREE.Mesh(new THREE.ConeGeometry(0.10,0.32,6,1),bm(0xff8820,0.9));
       tfire.position.set(p[0], MW+2.38, p[1]); egAdd(tfire);
       var tL=new THREE.PointLight(0xff9930, 1.2, 5.0);
-      tL.position.set(p[0], MW+2.5, p[1]); scene.add(tL);
+      tL.position.set(p[0], MW+2.5, p[1]); egAdd(tL);
     });
 
     // dirt path from outer edge toward gate
@@ -1244,7 +1244,7 @@
     // ── WALK MODE ───────────────────────────────────────
     var walkMode = false;
     var walkYaw = 0, walkPitch = 0;
-    var walkPos = new THREE.Vector3(0, MW+6.2, 9);
+    var walkPos = new THREE.Vector3(2, MW+1.8, 19);
     var keys = {};
     var walkOverlay = document.getElementById('walk-overlay');
     var crosshair   = document.getElementById('crosshair');
@@ -1256,7 +1256,8 @@
     window.enterWalk = function() {
       goMiddle();
       setTimeout(function(){
-        walkPos.set(2, MW+6.2, 10);
+        // start at south path entrance, facing north toward the gate
+        walkPos.set(2, MW+1.8, 19);
         walkYaw = Math.PI; walkPitch = 0;
         walkOverlay.classList.add('visible');
       }, 700);
@@ -1426,7 +1427,7 @@
     #gate-editor button:hover { background:#7a4820; }
   </style>
 
-  <details id="gate-editor">
+  <details id="gate-editor" style="display:none">
     <summary>⚙ Gate editor</summary>
     <label>X <input type="range" id="ge-x" min="-8" max="8" step="0.05" value="3.57"> <span class="val" id="ge-xv">3.57</span></label>
     <label>Z <input type="range" id="ge-z" min="2" max="10" step="0.05" value="6.69"> <span class="val" id="ge-zv">6.69</span></label>
