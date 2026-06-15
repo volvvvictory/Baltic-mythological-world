@@ -26,7 +26,6 @@ The world is structured around the **World Tree** (*Pasaulio medis*), the axis c
 ## How to run
 
 Open `Baltic mythological world/index.html` directly in a browser.
-```
 
 ## Mythological references
 
