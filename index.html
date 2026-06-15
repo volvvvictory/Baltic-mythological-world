@@ -683,9 +683,9 @@
     ];
     tentPositions.forEach(function(p){
       var tc = new THREE.Mesh(new THREE.ConeGeometry(0.75,1.6,4,1), tentMat);
-      tc.position.set(p[0], plY+0.8, p[1]); tc.rotation.y=Math.PI/4; tc.castShadow=true; scene.add(tc);
+      tc.position.set(p[0], MW+5.55, p[1]); tc.rotation.y=Math.PI/4; tc.castShadow=true; scene.add(tc);
       var tb = new THREE.Mesh(new THREE.CylinderGeometry(0.75,0.75,0.25,4,1), fmf(0xe8e0d0));
-      tb.position.set(p[0], plY+0.12, p[1]); tb.rotation.y=Math.PI/4; scene.add(tb);
+      tb.position.set(p[0], MW+4.625, p[1]); tb.rotation.y=Math.PI/4; scene.add(tb);
     });
 
     // Central campfire
