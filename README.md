@@ -1,6 +1,9 @@
 # Baltic Mythological World
 
-An interactive 3D exploration of Baltic cosmology built with [Three.js](https://threejs.org/). The scene is a single self-contained HTML file.
+> **Models of many-worlds. Connected by belt and roads**
+> *Professor Natalia Fedorova — 2026*
+
+A group project — an interactive 3D exploration of Baltic cosmology built with [Three.js](https://threejs.org/). The scene is a single self-contained HTML file.
 
 ## What it is
 
