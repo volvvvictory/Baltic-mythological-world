@@ -197,7 +197,7 @@
       hillfort: {
         world: 'Middle World — Žemė',
         title: 'The Hillfort',
-        text: 'Baltic tribes built hillforts on elevated mounds as fortified settlements. Wooden palisades of sharpened logs surrounded the plateau. Longhouses inside held families, stores, and workshops. The hillfort was both a refuge in times of raid and a gathering place for the community.\n\nSome tribes instead built on lake islands — "lake castles" (ezerpils). The Āraiši Lake Castle in Vidzeme is the best-preserved example: wooden houses on stilts above an artificial island, surrounded by defensive walls, with evidence of dwellings, workshops, and storage.'
+        text: 'Reconstructed from medieval museum engravings, this scene recreates the circular village settlement and the fortified inner courtyard of a Baltic hillfort. Wooden palisades of sharpened logs ring the elevated plateau. Inside, longhouses, storage huts, and the central fire reflect the daily life of a community bound by kinship and ritual.\n\nThe hillfort was both refuge and gathering place — a world unto itself, where the sacred fire was never allowed to go out. Its gate marked the threshold between the safety of the known world and the wilderness beyond.'
       },
       longhouse: {
         world: 'Middle World — Žemė',
@@ -212,7 +212,7 @@
       underworld: {
         world: 'Lower World — Velnias Realm',
         title: 'The Underworld',
-        text: 'The chthonic world below the earth was home to underground beings and the souls of the dead. Velnias (or Vels) was the god of the underworld, cattle, and the dead — the great antagonist of the sky god Dievs.\n\nThe afterlife was not fixed in one place. In different mythological ideas, the realm of the dead lay beneath the earth or far in the west, at the end of the Sun\'s daily path across the sky. The World Tree\'s roots reached deep into this dark realm, drawing up its hidden waters.'
+        text: 'Modelled on ancient Prussian belief, this realm beneath the earth is where ancestral spirits and the gods of the underworld resided. The tangled roots of the World Tree reach down into this dark place, drawing up hidden waters and binding the living world to the dead.\n\nVelnias — god of the underworld, cattle, and the dead — dwells here in eternal opposition to Pērkons. In Baltic tradition, death was not an end but a crossing: Māra, goddess of earth and the material world, received the body, while the sky god Dievs took the soul.'
       },
       portal: {
         world: 'The Cosmic Boundary',
@@ -222,7 +222,22 @@
       canopy: {
         world: 'Upper World — Dangus',
         title: 'The Sky Realm',
-        text: 'The world of sky deities sat above all others, reached through the crown of the World Tree. Dievs, the sky god, held court here — a calm, orderly deity who rode across the heavens. Saule, the Sun goddess, wove golden threads and lit the world below.\n\nThe cosmic mountain or heavenly tree was sometimes imagined as a long beanstalk, a mountain of glass, or the great oak itself — its nine branches holding the nine celestial bodies. Gods were said to walk among the branches, and the souls of the heroic dead rested here as birds in the leaves.'
+        text: 'The sacred oak\'s massive canopy reconstructs the Upper World of Baltic belief. Rather than a literal crown, the rising smoke of the eternal altar fire has been abstracted upward through a golden ring — a symbol of the sun and the gateway to the divine heavens.\n\nNine branches hold the nine celestial bodies: gods and stars whose movements governed the fate of the world below. The souls of the dead were said to rest here as birds among the leaves, and the sky god Dievs rode quietly across the heavens, maintaining the cosmic order.'
+      },
+      perkūnas: {
+        world: 'The Three Idols of Romove',
+        title: 'Perkūnas — God of Thunder',
+        text: 'The supreme god of thunder, sky, storms, and fire. Perkūnas enforces cosmic order and divine law, riding a goat-drawn chariot and carrying a sacred axe. He wages eternal war against Patulas, driving serpents and the spirits of the dead back to the underworld with his lightning.\n\nHis idol was kept burning with eternal fire — an ever-living flame of oak wood that the priests were forbidden to let die, on pain of death. The oak was his sacred tree.'
+      },
+      patrimpas: {
+        world: 'The Three Idols of Romove',
+        title: 'Patrimpas — God of the Living Earth',
+        text: 'The youthful god of springs, rivers, grain, and the living world. Patrimpas governed fertility and the abundance of the earth — harvests, cattle, and the vital force that runs through all growing things.\n\nHis idol was wreathed in grain stalks and a snake was kept coiled at its base, fed with milk by the priests. The snake was sacred: a sign of prosperity in the household, and an omen of misfortune if it fled.'
+      },
+      patulas: {
+        world: 'The Three Idols of Romove',
+        title: 'Patulas — God of the Underworld',
+        text: 'The grim ruler of the dead. Patulas received the souls of the departed and governed the dark realm beneath the earth — a pale, hollow-eyed figure with a long grey beard, whose face was turned downward toward the roots.\n\nAt Romove the three idols of Perkūnas, Patrimpas, and Patulas were carved into a single great oak, separated by an angular curtain of cloth. Together they held the three realms in balance: sky, earth, and underworld — the full axis of the Baltic cosmos.'
       }
     };
 
@@ -1049,10 +1064,24 @@
       var cap = new THREE.Mesh(new THREE.BoxGeometry(0.26*g,0.16,0.20*g), fmf(postCol));
       cap.position.set(tx, faceY+fh+0.14, tz); scene.add(cap);
     }
-    // Perkūnas — very dark charred oak, tall and imposing
-    makeTotem(-13.5, MW, 6.0,  0x140c04, 0x2c1a08, Math.PI*0.15, 1.35, 1.1);
-    // Saule — pale honey birch, shorter and slender
-    makeTotem( 12.0, MW, 8.5,  0xc8a060, 0xe8c888, Math.PI*1.85, 0.80, 0.8);
+    // Three idols of Romove — each tagged for lore
+    // makeTotem returns the face mesh for tagging
+    function makeTotemTagged(tx,ty,tz,postCol,faceCol,angle,scale,girth,lore){
+      makeTotem(tx,ty,tz,postCol,faceCol,angle,scale,girth);
+      // place an invisible hit-sphere at face height for raycasting
+      var s=scale||1.0, g=girth||1.0;
+      var faceY=ty+(4.5*s)+(2.5*s)+0.3;
+      var hit=new THREE.Mesh(new THREE.SphereGeometry(0.5*g,6,4),
+        new THREE.MeshBasicMaterial({visible:false}));
+      hit.position.set(tx,faceY+0.28*s,tz); scene.add(hit);
+      tag(hit, lore.world, lore.title, lore.text);
+    }
+    // Perkūnas — charred dark oak, tallest, sky realm — west of entrance
+    makeTotemTagged(-13.5, MW, 6.0, 0x140c04, 0x2c1a08, Math.PI*0.15, 1.35, 1.1, loreData.perkūnas);
+    // Patrimpas — warm green-tinged wood, medium — east of entrance
+    makeTotemTagged( 13.0, MW, 7.5, 0x4a6030, 0x7a9848, Math.PI*1.85, 1.00, 0.95, loreData.patrimpas);
+    // Patulas — pale bone face, wide and squat — south by path
+    makeTotemTagged(  1.5, MW,14.5, 0x1a1410, 0xc8c0a8, Math.PI*1.00, 0.90, 1.15, loreData.patulas);
 
     // ── UPPER WORLD — GIANT OAK CROWN + CLOUDS ───────────
     var SW = 18;
