@@ -123,6 +123,7 @@
     el.appendChild(rend.domElement);
 
     var scene = new THREE.Scene();
+    window._scene = scene; // debug handle
     scene.fog = new THREE.Fog(0xb4c8cc, 55, 110);
 
     // gradient sky dome — horizon matches fog color so distant objects blend into it
@@ -427,23 +428,149 @@
       shrub.scale.y=0.5; shrub.position.set(sx,UW+sh*0.25,sz); scene.add(shrub);
     }
 
-    // soul figure — white silhouette
-    var soulX=5, soulZ=2;
-    [[-0.12,0],[0.12,0]].forEach(function(l){
-      var leg=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.10,1.0,5,1),fmf(0xdddddd));
-      leg.position.set(soulX+l[0],UW+0.5,soulZ); scene.add(leg);
+    // soul figures — reusable ghostly silhouette builder
+    function soulMat(col, op){
+      if(op>=1) return fmf(col);
+      return new THREE.MeshPhongMaterial({color:col,flatShading:true,transparent:true,opacity:op,depthWrite:false});
+    }
+    function makeSoul(x, z, sc, op, faceAngle, withLight){
+      var g=new THREE.Group();
+      [[-0.12,0],[0.12,0]].forEach(function(l){
+        var leg=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.10,1.0,5,1),soulMat(0xdddddd,op));
+        leg.position.set(l[0],0.5,0); g.add(leg);
+      });
+      var torso=new THREE.Mesh(new THREE.BoxGeometry(0.38,0.7,0.26),soulMat(0xeeeeee,op));
+      torso.position.set(0,1.45,0); g.add(torso);
+      var head=new THREE.Mesh(new THREE.SphereGeometry(0.22,6,5),soulMat(0xffffff,op));
+      head.position.set(0,2.05,0); g.add(head);
+      var cloak=new THREE.Mesh(new THREE.ConeGeometry(0.32,1.1,5,1),soulMat(0xcccccc,op));
+      cloak.position.set(0,0.9,0); g.add(cloak);
+      var aura=new THREE.Mesh(new THREE.SphereGeometry(0.5,8,6),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.08*op,depthWrite:false,blending:THREE.AdditiveBlending}));
+      aura.position.set(0,1.5,0); g.add(aura);
+      var sg2=glowSprite(0xcfe8ff, 3.2, 0, 1.4, 0, 0.45*op); g.add(sg2);
+      if(withLight){ var sl=new THREE.PointLight(0xbfe0ff, 0.8, 7); sl.position.set(0,1.6,0); g.add(sl); }
+      g.position.set(x, UW, z); g.scale.setScalar(sc); g.rotation.y=faceAngle;
+      scene.add(g);
+      return g;
+    }
+    // main soul at the pool edge
+    makeSoul(5, 2, 1.0, 1.0, Math.atan2(-5,-2), true);
+    // procession of souls — walking in from the rim toward the dark water
+    makeSoul(9.6, 4.6, 0.88, 0.85, Math.atan2(-9.6,-4.6), false);
+    makeSoul(8.3, 3.6, 0.80, 0.68, Math.atan2(-8.3,-3.6), false);
+    makeSoul(7.2, 2.7, 0.72, 0.52, Math.atan2(-7.2,-2.7), false);
+
+    // ── VELNIAS ON HIS THRONE — ruler of the underworld, facing the pool ──
+    var vG=new THREE.Group();
+    var vx=-6.8, vz=-3.8;
+    vG.position.set(vx, UW, vz);
+    vG.rotation.y=Math.atan2(-vx, -vz); // face the pool centre
+    scene.add(vG);
+    var vStone=fmf(0x241c2e), vBody=fmf(0x16101c), vDark=fmf(0x0d0a12);
+    var dais=new THREE.Mesh(new THREE.BoxGeometry(2.2,0.3,1.8), vStone);
+    dais.position.set(0,0.15,0); vG.add(dais);
+    var thrBack=new THREE.Mesh(new THREE.BoxGeometry(1.35,2.5,0.28), vStone);
+    thrBack.position.set(0,1.55,-0.62); thrBack.castShadow=true; vG.add(thrBack);
+    var thrSeat=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.5,0.9), vStone);
+    thrSeat.position.set(0,0.55,-0.1); vG.add(thrSeat);
+    [-0.7,0.7].forEach(function(ax){
+      var arm=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.6,0.9), vStone);
+      arm.position.set(ax,0.9,-0.1); vG.add(arm);
     });
-    var torso=new THREE.Mesh(new THREE.BoxGeometry(0.38,0.7,0.26),fmf(0xeeeeee));
-    torso.position.set(soulX,UW+1.45,soulZ); scene.add(torso);
-    var head=new THREE.Mesh(new THREE.SphereGeometry(0.22,6,5),fmf(0xffffff));
-    head.position.set(soulX,UW+2.05,soulZ); scene.add(head);
-    var cloak=new THREE.Mesh(new THREE.ConeGeometry(0.32,1.1,5,1),fmf(0xcccccc));
-    cloak.position.set(soulX,UW+0.9,soulZ); scene.add(cloak);
-    var aura=new THREE.Mesh(new THREE.SphereGeometry(0.5,8,6),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.08,depthWrite:false,blending:THREE.AdditiveBlending}));
-    aura.position.set(soulX,UW+1.5,soulZ); scene.add(aura);
-    var soulGlow=glowSprite(0xcfe8ff, 3.2, soulX, UW+1.4, soulZ, 0.45);
-    scene.add(soulGlow);
-    var soulL=new THREE.PointLight(0xbfe0ff, 0.8, 7); soulL.position.set(soulX,UW+1.6,soulZ); scene.add(soulL);
+    // purple crystal finials on the throne back
+    [-0.55,0.55].forEach(function(cx2){
+      var fin=new THREE.Mesh(new THREE.OctahedronGeometry(0.16,0), bm(0x9955cc,0.5));
+      fin.position.set(cx2,2.9,-0.62); vG.add(fin);
+    });
+    // seated figure
+    var vThighs=new THREE.Mesh(new THREE.BoxGeometry(0.55,0.3,0.6), vBody);
+    vThighs.position.set(0,0.95,0.2); vG.add(vThighs);
+    [-0.16,0.16].forEach(function(lx2){
+      var shin=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.65,0.2), vBody);
+      shin.position.set(lx2,0.5,0.45); vG.add(shin);
+    });
+    var vTorso=new THREE.Mesh(new THREE.BoxGeometry(0.65,0.95,0.42), vBody);
+    vTorso.position.set(0,1.55,0); vTorso.castShadow=true; vG.add(vTorso);
+    tag(vTorso, 'Lower World — Velnias Realm', 'Velnias — Lord of the Dead',
+      'God of the underworld, cattle, and the dead, seated on his stone throne beside the still black water. Velnias dwells among the roots of the World Tree in eternal opposition to Pērkons, whose lightning drives the serpents and the restless dead back into the depths.\n\nYet Velnias was no simple devil — he was guardian of the ancestors, keeper of herds, and lord of the boundary between the living and the dead. Farmers left offerings at stones and springs so he would keep their cattle safe through winter.');
+    var vHead=new THREE.Mesh(new THREE.SphereGeometry(0.27,7,6), vBody);
+    vHead.position.set(0,2.25,0); vG.add(vHead);
+    // horns
+    [-1,1].forEach(function(hs){
+      var horn=new THREE.Mesh(new THREE.ConeGeometry(0.08,0.55,5,1), vDark);
+      horn.position.set(hs*0.24,2.62,0); horn.rotation.z=-hs*0.55; vG.add(horn);
+    });
+    // glowing teal eyes
+    [-0.1,0.1].forEach(function(ex4){
+      var eye=new THREE.Mesh(new THREE.SphereGeometry(0.035,5,4), bm(0x44ffcc,1.0));
+      eye.position.set(ex4,2.28,0.24); vG.add(eye);
+    });
+    // staff with crystal
+    var vStaff=new THREE.Mesh(new THREE.CylinderGeometry(0.035,0.05,2.5,5,1), vDark);
+    vStaff.position.set(0.95,1.35,0.15); vG.add(vStaff);
+    var vOrb=new THREE.Mesh(new THREE.OctahedronGeometry(0.14,0), bm(0x44ddb8,0.8));
+    vOrb.position.set(0.95,2.7,0.15); vG.add(vOrb);
+    vG.add(glowSprite(0x44ddb8, 1.2, 0.95, 2.7, 0.15, 0.55));
+    vG.add(glowSprite(0x6644aa, 4.2, 0, 1.8, -0.3, 0.35));
+    var vLight=new THREE.PointLight(0x55ccaa, 0.9, 9);
+    vLight.position.set(0,2.2,0.6); vG.add(vLight);
+
+    // ── SOUL-WISPS — glowing orbs rising from the ground and fading ──
+    var wisps=[];
+    for(var wi=0; wi<14; wi++){
+      var wAng=wi/14*Math.PI*2+0.4, wRad=2.5+((wi*17)%8);
+      var wx=Math.cos(wAng)*wRad, wz=Math.sin(wAng)*wRad;
+      var ws=glowSprite(wi%3===0?0x9fe8d8:0xbfd8ff, 0.55+((wi*7)%3)*0.18, wx, UW+1, wz, 0);
+      scene.add(ws);
+      wisps.push({s:ws, x0:wx, z0:wz, ph:wi*1.37, sp:0.22+(wi%3)*0.05});
+    }
+
+    // ── FERRY OF SOULS — dark boat circling the still water ──
+    var ferryG=new THREE.Group(); scene.add(ferryG);
+    var fWood=fmf(0x241a12);
+    var fHull=new THREE.Mesh(new THREE.BoxGeometry(1.7,0.28,0.62), fWood);
+    fHull.position.set(0,0.14,0); ferryG.add(fHull);
+    tag(fHull, 'Lower World — Velnias Realm', 'The Ferry of Souls',
+      'A dark boat circles the still water — the mirror of the ship on the lake above. In Baltic folk belief the dead had to cross water to reach the world beyond; boats and boat-shaped coffins carried them on the last journey.\n\nThe lantern at the prow is the only warm light in the realm of the dead — a spark of the living world accompanying each soul across.');
+    [-1,1].forEach(function(fe){
+      var prow=new THREE.Mesh(new THREE.ConeGeometry(0.30,0.55,4,1), fWood);
+      prow.rotation.z=fe*Math.PI/2; prow.rotation.y=Math.PI/4;
+      prow.position.set(fe*1.1,0.16,0); ferryG.add(prow);
+    });
+    // lantern pole at the prow
+    var fPole=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.04,1.1,5,1), fWood);
+    fPole.position.set(-0.75,0.7,0); ferryG.add(fPole);
+    var fLant=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.2,0.16), bm(0xffcc66,0.9));
+    fLant.position.set(-0.75,1.3,0); ferryG.add(fLant);
+    ferryG.add(glowSprite(0xffbb55, 1.4, -0.75, 1.3, 0, 0.6));
+    var fLightP=new THREE.PointLight(0xffbb55, 0.8, 6);
+    fLightP.position.set(-0.75,1.4,0); ferryG.add(fLightP);
+    // hooded ferryman with pole
+    var fMan=new THREE.Mesh(new THREE.ConeGeometry(0.24,0.85,5,1), fmf(0x1a1622));
+    fMan.position.set(0.3,0.68,0); ferryG.add(fMan);
+    var fHead=new THREE.Mesh(new THREE.SphereGeometry(0.12,6,5), fmf(0x100c16));
+    fHead.position.set(0.3,1.18,0); ferryG.add(fHead);
+    var fOar=new THREE.Mesh(new THREE.CylinderGeometry(0.025,0.025,1.7,4,1), fWood);
+    fOar.position.set(0.55,0.7,0.25); fOar.rotation.z=0.5; fOar.rotation.x=0.35; ferryG.add(fOar);
+
+    // ── ŽALTYS — the sacred grass-snake coiled among the roots ──
+    var znG=new THREE.Group();
+    znG.position.set(-9.5, UW, 6.5); znG.rotation.y=1.1; scene.add(znG);
+    var zSkin=fmf(0x1e3822);
+    var coil1=new THREE.Mesh(new THREE.TorusGeometry(0.40,0.10,6,14), zSkin);
+    coil1.rotation.x=-Math.PI/2; coil1.position.y=0.10; znG.add(coil1);
+    var coil2=new THREE.Mesh(new THREE.TorusGeometry(0.26,0.085,6,12), zSkin);
+    coil2.rotation.x=-Math.PI/2; coil2.position.y=0.26; znG.add(coil2);
+    var zNeck=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.075,0.45,5,1), zSkin);
+    zNeck.position.set(0.24,0.5,0); zNeck.rotation.z=-0.3; znG.add(zNeck);
+    var zHead=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.10,0.24), zSkin);
+    zHead.position.set(0.32,0.74,0); zHead.rotation.y=Math.PI/2; znG.add(zHead);
+    tag(zHead, 'Lower World — Velnias Realm', 'Žaltys — the Sacred Snake',
+      'The grass-snake was sacred throughout the Baltic lands. A žaltys living under the threshold brought prosperity; milk was set out for it, and killing one brought grave misfortune.\n\nAt Romove a snake was kept coiled at the idol of Patrimpas, fed by the priests. Here, among the roots of the World Tree, the žaltys guards the boundary of the underworld.');
+    [-0.05,0.05].forEach(function(ze){
+      var zEye=new THREE.Mesh(new THREE.SphereGeometry(0.022,4,4), bm(0x66ffcc,1.0));
+      zEye.position.set(0.34,0.77,ze+0.12*Math.sign(ze)); znG.add(zEye);
+    });
 
     // ROOTS — Monument Valley style: flat rectangular beams, sharp 90-degree turns
     var rootMats=[
@@ -598,6 +725,7 @@
     deformMound(moundGeo);
     var mound = new THREE.Mesh(moundGeo, fmf(0x6cae36));
     mound.position.y=MW+2.25; mound.castShadow=true; mound.receiveShadow=false; scene.add(mound);
+    mound.updateMatrixWorld(true); // raycasts below run before first render
     tag(mound, loreData.hillfort.world, loreData.hillfort.title, loreData.hillfort.text);
 
     // mound slope dressing — rocks, grass tufts, flowers, dropped onto the real surface
@@ -605,7 +733,8 @@
     var dressRay=new THREE.Raycaster();
     var dressDown=new THREE.Vector3(0,-1,0);
     function dropOnMound(x,z){
-      dressRay.set(new THREE.Vector3(x,MW+8,z), dressDown);
+      // small epsilon avoids rays running exactly along triangle seams (guaranteed miss)
+      dressRay.set(new THREE.Vector3(x+0.013,MW+8,z+0.017), dressDown);
       var hit=dressRay.intersectObjects([mound],false);
       return hit.length ? hit[0].point.y : null;
     }
@@ -649,11 +778,11 @@
       while(adiff>Math.PI) adiff-=Math.PI*2; while(adiff<-Math.PI) adiff+=Math.PI*2;
       if(Math.abs(adiff)<gateGap) continue; // skip posts inside gate
       var post = new THREE.Mesh(new THREE.BoxGeometry(0.24,1.5,0.24), pMat);
-      post.position.set(Math.cos(pa)*7.6, MW+5.25, Math.sin(pa)*7.6); post.castShadow=true; scene.add(post);
+      post.position.set(Math.cos(pa)*8.8, MW+5.25, Math.sin(pa)*8.8); post.castShadow=true; scene.add(post);
     }
     // open-arc rail — TubeGeometry going around all but the gate gap
     (function(){
-      var pts=[], segs=64, r=7.6, startA=gatePA+gateGap, span=Math.PI*2-gateGap*2;
+      var pts=[], segs=64, r=8.8, startA=gatePA+gateGap, span=Math.PI*2-gateGap*2;
       for(var i=0;i<=segs;i++){
         var a=startA+span*i/segs;
         pts.push(new THREE.Vector3(Math.cos(a)*r, MW+5.65, Math.sin(a)*r));
@@ -663,7 +792,7 @@
     })();
 
     [0,Math.PI*0.5,Math.PI,Math.PI*1.5].forEach(function(a){
-      var tx=Math.cos(a)*7.4, tz=Math.sin(a)*7.4, ty=MW+4.5;
+      var tx=Math.cos(a)*8.6, tz=Math.sin(a)*8.6, ty=MW+4.5;
       var base = new THREE.Mesh(new THREE.BoxGeometry(1.2,2.2,1.2), fmf(0xaa7038));
       base.position.set(tx,ty+1.1,tz); base.castShadow=true; scene.add(base);
       var roof = new THREE.Mesh(new THREE.ConeGeometry(1.0,1.0,4,1), fmf(0x7a4020));
@@ -675,7 +804,7 @@
 
     // ── UPPER HILLFORT GATE — group so we can rotate it as one piece ──
     var ugGroup = new THREE.Group();
-    ugGroup.position.set(3.45, 0, 6.45);
+    ugGroup.position.set(4.01, 0, 7.50); // scaled out with the wider plateau (same angle)
     ugGroup.rotation.y = 0.54;
     window._ugGroup = ugGroup;
     scene.add(ugGroup);
@@ -807,24 +936,49 @@
       pathSlab.position.set(0, MW+0.02, pz); pathSlab.receiveShadow=true; scene.add(pathSlab);
     }
 
-    // Stairs — wide flat steps going from outer ground up the mound face
+    // Stairs — fitted to the actual deformed slope by raycast: for each step height,
+    // binary-search the radius where the hill surface reaches that height
     var STEPS = 18;
+    function stairSurfR(t, sa){
+      var yT = MW + t*4.5 - 0.05;
+      var lo=8.0, hi=12.5;
+      for(var k=0;k<20;k++){
+        var mid=(lo+hi)/2;
+        var y=dropOnMound(Math.sin(sa)*mid, Math.cos(sa)*mid);
+        if(y===null || y<yT) hi=mid; else lo=mid;
+      }
+      return (lo+hi)/2;
+    }
+    var stepData=[];
     for (var i=0; i<STEPS; i++) {
       var t2 = i/(STEPS-1);
       var sa3 = 0.0 + t2*0.55;
-      var sr3 = 11.0 - t2*3.2;
+      var sr3 = stairSurfR(t2, sa3) + 0.18; // step nose slightly proud of the slope
       var stepY = MW + t2*4.5;
       var stepW = 2.2 - t2*0.5;
+      stepData.push([sa3, sr3, stepY, stepW]);
+      var sx6=Math.sin(sa3)*sr3, sz6=Math.cos(sa3)*sr3;
       var rp = new THREE.Mesh(new THREE.BoxGeometry(stepW, 0.22, 0.75), fmf(i%2===0?0x9a6a38:0x8a5a28));
-      rp.position.set(Math.sin(sa3)*sr3, stepY, Math.cos(sa3)*sr3);
+      rp.position.set(sx6, stepY, sz6);
       rp.rotation.y = -sa3;
       rp.castShadow = true; scene.add(rp);
       if (i < STEPS-1) {
         var rh3 = 4.5/STEPS;
         var riser = new THREE.Mesh(new THREE.BoxGeometry(stepW, rh3, 0.18), fmf(0x7a4a20));
-        riser.position.set(Math.sin(sa3)*sr3, stepY+rh3/2, Math.cos(sa3)*sr3 - 0.45);
+        riser.position.set(sx6, stepY+rh3/2, sz6 - 0.45);
         riser.rotation.y = -sa3; scene.add(riser);
       }
+      // support legs where the step hangs over the steep face
+      var exd6=Math.cos(sa3), ezd6=Math.sin(sa3);
+      [-1,1].forEach(function(ls){
+        var lx6=sx6+ls*(stepW/2-0.18)*exd6, lz6=sz6+ls*(stepW/2-0.18)*ezd6;
+        var gy6=dropOnMound(lx6,lz6); if(gy6===null) gy6=MW;
+        var legH=stepY-0.11-gy6;
+        if(legH>0.15){
+          var leg6=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.06,legH,5,1), fmf(0x6a4018));
+          leg6.position.set(lx6, gy6+legH/2, lz6); leg6.castShadow=true; scene.add(leg6);
+        }
+      });
     }
 
     // stair handrails — posts every 3rd step, rails connecting the post tops
@@ -838,8 +992,8 @@
     }
     var railTopsL=[], railTopsR=[];
     [0,3,6,9,12,15,17].forEach(function(i){
-      var t3=i/(STEPS-1), ra4=t3*0.55, rr4=11.0-t3*3.2;
-      var ry4=MW+t3*4.5, rw4=2.2-t3*0.5;
+      var sd5=stepData[i];
+      var ra4=sd5[0], rr4=sd5[1], ry4=sd5[2], rw4=sd5[3];
       var cx4=Math.sin(ra4)*rr4, cz4=Math.cos(ra4)*rr4;
       var exd=Math.cos(ra4), ezd=Math.sin(ra4); // step local x direction
       [[-1,railTopsL],[1,railTopsR]].forEach(function(sd){
@@ -1043,7 +1197,7 @@
     wellBucket.position.set(wellX,MW+0.75,wellZ); scene.add(wellBucket);
 
     // garden plots — tilled dirt beds with crop rows (west of the path)
-    [[-6.5,9.5,0.25],[-9.8,5.6,-0.15]].forEach(function(gp){
+    [[-7.3,10.7,0.25],[-11.2,6.4,-0.15]].forEach(function(gp){
       var bed=new THREE.Mesh(new THREE.BoxGeometry(2.4,0.12,1.6), fmf(0x5a4028));
       bed.position.set(gp[0],MW+0.06,gp[1]); bed.rotation.y=gp[2]; bed.receiveShadow=true; scene.add(bed);
       for(var ri=0;ri<4;ri++){
@@ -1055,37 +1209,42 @@
     });
 
     // haystacks near the gardens
-    [[-4.2,10.3],[-8.6,7.2]].forEach(function(hp){
+    [[-9.0,10.0],[-10.2,8.0]].forEach(function(hp){
       var hay=new THREE.Mesh(new THREE.ConeGeometry(0.75,1.25,7,1), fmf(0xd8b868));
       hay.position.set(hp[0],MW+0.62,hp[1]); hay.castShadow=true; scene.add(hay);
       var hayPole=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,0.4,4,1), fmf(0x5a3a1c));
       hayPole.position.set(hp[0],MW+1.4,hp[1]); scene.add(hayPole);
     });
 
-    // animal pen with sheep — west side
-    var penX=-8.5, penZ=-2.0, penW=4.2, penD=3.0;
+    // animal pen with sheep — a rotated group aligned tangentially to the hill,
+    // so its long side follows the flat ring between hill foot (~r11) and terrace edge (r14)
+    var penG=new THREE.Group();
+    penG.position.set(-11.9, 0, -3.15);
+    penG.rotation.y=1.31; // local x runs along the ring tangent
+    scene.add(penG);
+    var penW=4.2, penD=2.4;
     [[-penW/2,-penD/2],[penW/2,-penD/2],[-penW/2,penD/2],[penW/2,penD/2]].forEach(function(c){
       var pp=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.08,0.9,5,1), fmf(0x6a4826));
-      pp.position.set(penX+c[0],MW+0.45,penZ+c[1]); scene.add(pp);
+      pp.position.set(c[0],MW+0.45,c[1]); penG.add(pp);
     });
     [[0,-penD/2,penW,0],[0,penD/2,penW,0],[-penW/2,0,penD,Math.PI/2],[penW/2,0,penD,Math.PI/2]].forEach(function(r){
       [0.35,0.7].forEach(function(ry){
         var rail=new THREE.Mesh(new THREE.BoxGeometry(r[2],0.06,0.06), fmf(0x7a5a34));
-        rail.position.set(penX+r[0],MW+ry,penZ+r[1]); rail.rotation.y=r[3]; scene.add(rail);
+        rail.position.set(r[0],MW+ry,r[1]); rail.rotation.y=r[3]; penG.add(rail);
       });
     });
     // sheep — plump white bodies with dark heads; one dark goat
     [[-1.2,-0.5,0.4,0xf0ece0],[0.3,0.6,2.1,0xf0ece0],[1.1,-0.7,3.6,0xe8e2d2],[-0.2,-1.0,1.0,0x4a3a2c]].forEach(function(s){
       var body=new THREE.Mesh(new THREE.SphereGeometry(0.30,7,5), fmf(s[3]));
       body.scale.set(1.35,1.0,0.95);
-      body.position.set(penX+s[0],MW+0.34,penZ+s[1]); body.rotation.y=s[2]; body.castShadow=true; scene.add(body);
+      body.position.set(s[0],MW+0.34,s[1]); body.rotation.y=s[2]; body.castShadow=true; penG.add(body);
       var head=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.16,0.18), fmf(s[3]===0x4a3a2c?0x3a2c20:0x3a3028));
-      head.position.set(penX+s[0]+Math.cos(s[2])*0.42, MW+0.42, penZ+s[1]-Math.sin(s[2])*0.42);
-      head.rotation.y=s[2]; scene.add(head);
+      head.position.set(s[0]+Math.cos(s[2])*0.42, MW+0.42, s[1]-Math.sin(s[2])*0.42);
+      head.rotation.y=s[2]; penG.add(head);
     });
 
     // firewood stacks — one by the well, one by the pen
-    [[6.6,9.2,0.3],[-6.9,-1.6,1.2]].forEach(function(fw){
+    [[6.8,9.5,0.3],[-12.6,-1.2,1.2]].forEach(function(fw){
       for(var li2=0;li2<5;li2++){
         var lx2=(li2%3)*0.19-0.19, ly2=Math.floor(li2/3)*0.17+0.09;
         var wlog=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,0.85,5,1), fmf(li2%2===0?0x6a4826:0x7a5430));
@@ -1750,14 +1909,9 @@
       if (flatDist > 15) { walkPos.x *= 15/flatDist; walkPos.z *= 15/flatDist; flatDist = 15; }
 
       // ground height follows mound cone: base r=9 y=0, top r=6 y=4.5, plateau inside r=6
-      var groundY;
-      if (flatDist <= 8.0) {
-        groundY = MW + 4.5;
-      } else if (flatDist >= 10.8) {
-        groundY = MW;
-      } else {
-        groundY = MW + 4.5 * (10.8 - flatDist) / (10.8 - 8.0);
-      }
+      // follow the real deformed hill surface; flat ground outside it
+      var gY = dropOnMound(walkPos.x, walkPos.z);
+      var groundY = (gY === null) ? MW : gY;
       walkPos.y = groundY + 0.5;
       cam.position.copy(walkPos);
       var lookAt = new THREE.Vector3(
@@ -1847,6 +2001,20 @@
       smokeMesh.material.opacity=0.28+0.07*Math.sin(t*0.5);
       waterMat.emissiveIntensity = 0.8 + 0.3*Math.sin(t*0.7);
       uwMistMat.opacity = 0.3 + 0.1*Math.sin(t*0.9);
+      // soul-wisps rising and fading
+      for(var wi2=0;wi2<wisps.length;wi2++){
+        var wp=wisps[wi2];
+        var wLife=((t*wp.sp+wp.ph)%3)/3;
+        wp.s.position.set(
+          wp.x0+Math.sin(t*0.7+wp.ph)*0.4,
+          UW+0.4+wLife*5.5,
+          wp.z0+Math.cos(t*0.6+wp.ph)*0.4);
+        wp.s.material.opacity=Math.sin(wLife*Math.PI)*0.55;
+      }
+      // ferry of souls — slow circle on the dark pool, gentle bob
+      var fa2=t*0.06;
+      ferryG.position.set(Math.cos(fa2)*3.8, UW+0.10+0.04*Math.sin(t*1.1), Math.sin(fa2)*3.8);
+      ferryG.rotation.y=-fa2-Math.PI/2;
       // soul-birds circling the crown
       for(var bi2=0;bi2<birds.length;bi2++){
         var bd=birds[bi2];
