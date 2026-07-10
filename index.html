@@ -125,6 +125,39 @@
     var scene = new THREE.Scene();
     scene.fog = new THREE.Fog(0xb4c8cc, 55, 110);
 
+    // gradient sky dome — horizon matches fog color so distant objects blend into it
+    var skyDome = new THREE.Mesh(
+      new THREE.SphereGeometry(240, 24, 12),
+      new THREE.ShaderMaterial({
+        side: THREE.BackSide, depthWrite: false, fog: false,
+        uniforms: {
+          topCol:    {value: new THREE.Color(0x7fa4c4)},
+          bottomCol: {value: new THREE.Color(0xb4c8cc)}
+        },
+        vertexShader: 'varying vec3 vP; void main(){ vP=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+        fragmentShader: 'uniform vec3 topCol; uniform vec3 bottomCol; varying vec3 vP; void main(){ float h=normalize(vP).y*0.5+0.5; gl_FragColor=vec4(mix(bottomCol,topCol,smoothstep(0.4,0.9,h)),1.0); }'
+      })
+    );
+    scene.add(skyDome);
+
+    // soft radial-gradient texture shared by all glow sprites
+    var glowCanvas=document.createElement('canvas');
+    glowCanvas.width=glowCanvas.height=128;
+    var gcx=glowCanvas.getContext('2d');
+    var gGrad=gcx.createRadialGradient(64,64,0,64,64,64);
+    gGrad.addColorStop(0.0,'rgba(255,255,255,0.90)');
+    gGrad.addColorStop(0.25,'rgba(255,255,255,0.32)');
+    gGrad.addColorStop(0.6,'rgba(255,255,255,0.08)');
+    gGrad.addColorStop(1.0,'rgba(255,255,255,0)');
+    gcx.fillStyle=gGrad; gcx.fillRect(0,0,128,128);
+    var glowTex=new THREE.CanvasTexture(glowCanvas);
+    function glowSprite(col,size,x,y,z,opacity){
+      var m=new THREE.SpriteMaterial({map:glowTex,color:col,blending:THREE.AdditiveBlending,transparent:true,depthWrite:false,opacity:opacity||0.85});
+      var s=new THREE.Sprite(m);
+      s.scale.set(size,size,1); s.position.set(x,y,z);
+      return s;
+    }
+
     var cam = new THREE.PerspectiveCamera(50, W/H, 0.1, 300);
     var th=0.9, ph=1.05, rd=62, tTh=0.9, tPh=1.05, tRd=62;
     var lookY=5, tLookY=5;
@@ -171,9 +204,9 @@
     scene.add(sun);
 
     var fireL  = new THREE.PointLight(0xffffff, 4.0, 34); fireL.position.set(0,-16,0);   scene.add(fireL);
-    var waterL = new THREE.PointLight(0xcccccc, 2.5, 28); waterL.position.set(0,-17,0);  scene.add(waterL);
-    var rL1    = new THREE.PointLight(0xaaaaaa, 1.8, 20); rL1.position.set(7,-14,4);     scene.add(rL1);
-    var rL2    = new THREE.PointLight(0xbbbbbb, 1.8, 20); rL2.position.set(-7,-14,-4);   scene.add(rL2);
+    var waterL = new THREE.PointLight(0x7fd8c8, 2.5, 28); waterL.position.set(0,-17,0);  scene.add(waterL);
+    var rL1    = new THREE.PointLight(0x6688cc, 1.8, 20); rL1.position.set(7,-14,4);     scene.add(rL1);
+    var rL2    = new THREE.PointLight(0x55bbaa, 1.8, 20); rL2.position.set(-7,-14,-4);   scene.add(rL2);
     var eL1    = new THREE.PointLight(0xffffff, 1.5, 12); eL1.position.set(5,-19,5);     scene.add(eL1);
     var eL2    = new THREE.PointLight(0xdddddd, 1.2, 10); eL2.position.set(-6,-20,-4);   scene.add(eL2);
     var fpL    = new THREE.PointLight(0xff8800, 2.5, 10); fpL.position.set(0,5.5,0);     scene.add(fpL);
@@ -408,13 +441,16 @@
     cloak.position.set(soulX,UW+0.9,soulZ); scene.add(cloak);
     var aura=new THREE.Mesh(new THREE.SphereGeometry(0.5,8,6),new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.08,depthWrite:false,blending:THREE.AdditiveBlending}));
     aura.position.set(soulX,UW+1.5,soulZ); scene.add(aura);
+    var soulGlow=glowSprite(0xcfe8ff, 3.2, soulX, UW+1.4, soulZ, 0.45);
+    scene.add(soulGlow);
+    var soulL=new THREE.PointLight(0xbfe0ff, 0.8, 7); soulL.position.set(soulX,UW+1.6,soulZ); scene.add(soulL);
 
     // ROOTS — Monument Valley style: flat rectangular beams, sharp 90-degree turns
     var rootMats=[
-      new THREE.MeshPhongMaterial({color:0x2a2a2a,flatShading:true}),
-      new THREE.MeshPhongMaterial({color:0x333333,flatShading:true}),
-      new THREE.MeshPhongMaterial({color:0x1e1e1e,flatShading:true}),
-      new THREE.MeshPhongMaterial({color:0x3d3d3d,flatShading:true}),
+      new THREE.MeshPhongMaterial({color:0x33231a,flatShading:true}),
+      new THREE.MeshPhongMaterial({color:0x3e2c1e,flatShading:true}),
+      new THREE.MeshPhongMaterial({color:0x271a12,flatShading:true}),
+      new THREE.MeshPhongMaterial({color:0x4a3524,flatShading:true}),
     ];
     function rootBeam(x1,y1,z1,x2,y2,z2,tw,th,mi){
       var dx=x2-x1,dy=y2-y1,dz=z2-z1;
@@ -503,11 +539,13 @@
     uwSg.setAttribute('position',new THREE.Float32BufferAttribute(uwSp,3));
     scene.add(new THREE.Points(uwSg,new THREE.PointsMaterial({color:0xffffff,size:0.12})));
 
-    // Bioluminescent tips at water level
+    // Bioluminescent tips at water level — with soft glow halos
     for (var i=0; i<10; i++) {
       var da=i/10*Math.PI*2, dr=7+(i%4)*1.2;
-      var dot=new THREE.Mesh(new THREE.SphereGeometry(0.2,5,5),bm(i%2===0?0x00eebb:0x4477ff));
+      var dotCol=i%2===0?0x00eebb:0x4477ff;
+      var dot=new THREE.Mesh(new THREE.SphereGeometry(0.2,5,5),bm(dotCol));
       dot.position.set(Math.cos(da)*dr, UW+0.5, Math.sin(da)*dr); scene.add(dot);
+      scene.add(glowSprite(dotCol, 1.4, Math.cos(da)*dr, UW+0.5, Math.sin(da)*dr, 0.5));
     }
     for (var i=0; i<12; i++) {
       var sa=i/12*Math.PI*2, sr=6+(i%4)*1.6, ssw=0.7+(i%3)*0.4, ssh=0.5+(i%4)*0.4;
@@ -531,11 +569,75 @@
     var ditch = new THREE.Mesh(new THREE.RingGeometry(11.0,12.8,14), fmf(0x8a5a30));
     ditch.rotation.x=-Math.PI/2; ditch.position.y=MW-0.04; scene.add(ditch);
 
-    var mound = new THREE.Mesh(new THREE.CylinderGeometry(8.0,10.5,4.5,12,1), fmf(0x60a030));
-    mound.position.y=MW+2.25; mound.castShadow=true; mound.receiveShadow=true; scene.add(mound);
+    // mound — deformed cone: convex profile + organic lumps, clean top ring for the platform
+    function deformMound(geo){
+      var pos=geo.attributes.position, v=new THREE.Vector3();
+      for(var vi=0; vi<pos.count; vi++){
+        v.fromBufferAttribute(pos,vi);
+        var r=Math.hypot(v.x,v.z); if(r<0.001) continue;
+        var ang=Math.atan2(v.z,v.x);
+        var h01=(v.y+2.25)/4.5;                 // 0 bottom → 1 top
+        // keep the very top ring stable so the village platform edge matches
+        var topClamp=h01>0.9 ? Math.max(0,(1-h01)/0.1) : 1;
+        // convex bulge — push the mid-slope outward for a rounded earthwork
+        var bulge=Math.sin(h01*Math.PI)*0.7;
+        // low-frequency angular noise — smooth ridges & hollows (no folding on 28 segments)
+        var noise=(Math.sin(ang*3+1.3)*0.34 + Math.sin(ang*5-2.1)*0.16)
+                  * (0.6+0.4*Math.sin(h01*3));
+        var dr=(bulge+noise)*topClamp;
+        var nr=r+dr;
+        v.x=Math.cos(ang)*nr; v.z=Math.sin(ang)*nr;
+        // gentle vertical lumpiness on the slope (not on the top ring)
+        v.y+=Math.sin(ang*4+h01*5)*0.12*topClamp*(1-Math.abs(h01-0.5)*1.4);
+        pos.setXYZ(vi,v.x,v.y,v.z);
+      }
+      geo.computeVertexNormals();
+    }
+    // solid closed cone — its flat top cap is the village floor (no separate platform)
+    var moundGeo = new THREE.CylinderGeometry(9.2,11.0,4.5,28,7,false);
+    deformMound(moundGeo);
+    var mound = new THREE.Mesh(moundGeo, fmf(0x6cae36));
+    mound.position.y=MW+2.25; mound.castShadow=true; mound.receiveShadow=false; scene.add(mound);
     tag(mound, loreData.hillfort.world, loreData.hillfort.title, loreData.hillfort.text);
-    var plat = new THREE.Mesh(new THREE.CircleGeometry(8.0,12), fmf(0x72b83a));
-    plat.rotation.x=-Math.PI/2; plat.position.y=MW+4.52; scene.add(plat);
+
+    // mound slope dressing — rocks, grass tufts, flowers, dropped onto the real surface
+    var stairPhiMin=0.78, stairPhiMax=1.84; // clear the stair sector
+    var dressRay=new THREE.Raycaster();
+    var dressDown=new THREE.Vector3(0,-1,0);
+    function dropOnMound(x,z){
+      dressRay.set(new THREE.Vector3(x,MW+8,z), dressDown);
+      var hit=dressRay.intersectObjects([mound],false);
+      return hit.length ? hit[0].point.y : null;
+    }
+    // even angular spread with jitter around the whole hill
+    var dressN=64;
+    for(var di=0; di<dressN; di++){
+      var phi=(di/dressN)*Math.PI*2 + (((di*37)%13)/13-0.5)*0.09;
+      // skip stair sector (in cosφ/sinφ convention used by the stairs)
+      if(phi>stairPhiMin && phi<stairPhiMax) continue;
+      var rad=9.3 + ((di*29)%10)/10*1.6;          // slope band, avoids flat top
+      var jx=(((di*53)%7)/7-0.5)*0.5, jz=(((di*41)%7)/7-0.5)*0.5;
+      var x=Math.cos(phi)*rad+jx, z=Math.sin(phi)*rad+jz;
+      var y=dropOnMound(x,z);
+      if(y===null) continue;
+      var kind=di%3;
+      if(kind===0){
+        var rs=0.16+((di*5)%4)*0.07;
+        var rock=new THREE.Mesh(new THREE.BoxGeometry(rs*1.4,rs,rs*1.1), fmf(di%2===0?0x8a8a78:0x757564));
+        rock.rotation.set(0.3, phi*2.1, 0.2);
+        rock.position.set(x,y+rs*0.2,z); rock.castShadow=true; scene.add(rock);
+      } else if(kind===1){
+        var gh=0.22+((di*3)%3)*0.09;
+        var tuft=new THREE.Mesh(new THREE.ConeGeometry(0.10,gh,5,1), fmf(di%2===0?0x4e8c2c:0x63a838));
+        tuft.position.set(x,y+gh*0.4,z);
+        tuft.rotation.set((phi%0.3)-0.15, 0, (phi%0.24)-0.12); scene.add(tuft);
+      } else {
+        var stem=new THREE.Mesh(new THREE.CylinderGeometry(0.015,0.015,0.16,4,1), fmf(0x3e7020));
+        stem.position.set(x,y+0.08,z); scene.add(stem);
+        var bloom=new THREE.Mesh(new THREE.SphereGeometry(0.05,5,4), fmf(di%2===0?0xfff4d8:0xffd84a));
+        bloom.position.set(x,y+0.18,z); scene.add(bloom);
+      }
+    }
 
     // gate angle in palisade convention: cos(pa)=sin(ugAngle), sin(pa)=cos(ugAngle)
     var gatePA = Math.atan2(6.45, 3.45); // gate position (x=3.45, z=6.45)
@@ -584,9 +686,22 @@
       if(ti===0) tag(gtower, loreData.gate.world, loreData.gate.title, loreData.gate.text);
       var groof = new THREE.Mesh(new THREE.ConeGeometry(0.88,1.1,4,1), gWoodDark);
       groof.position.set(ox, gty+3.95, 0); groof.rotation.y=Math.PI/4; groof.castShadow=true; ugAdd(groof);
+      // dark corner posts — timber-framed look
+      [[-0.55,-0.55],[0.55,-0.55],[-0.55,0.55],[0.55,0.55]].forEach(function(cp){
+        var cpost=new THREE.Mesh(new THREE.BoxGeometry(0.14,3.5,0.14), gWoodDarkest);
+        cpost.position.set(ox+cp[0], gty+1.75, cp[1]); ugAdd(cpost);
+      });
       [0.6,1.5,2.4].forEach(function(by){
         var band=new THREE.Mesh(new THREE.BoxGeometry(1.15,0.12,1.15), gWoodDarkest);
         band.position.set(ox, gty+by, 0); ugAdd(band);
+      });
+      // narrow arrow-slit window near the top
+      var slit=new THREE.Mesh(new THREE.BoxGeometry(0.10,0.42,0.05), fmf(0x140a02));
+      slit.position.set(ox, gty+2.85, 0.58); ugAdd(slit);
+      // žirgeliai at the tower roof peaks — match the village houses
+      [-0.5,0.5].forEach(function(tilt){
+        var zb=new THREE.Mesh(new THREE.BoxGeometry(0.035,0.36,0.035), fmf(0x6a4018));
+        zb.position.set(ox, gty+4.58, 0); zb.rotation.z=tilt; ugAdd(zb);
       });
       var tside = ox>0?0.65:-0.65;
       var tpole=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.07,1.0,5,1), gWoodDarkest);
@@ -595,6 +710,7 @@
       tbowl.position.set(ox+tside, gty+2.06, 0); ugAdd(tbowl);
       var tflame=new THREE.Mesh(new THREE.ConeGeometry(0.08,0.26,6,1), bm(0xff8820,0.9));
       tflame.position.set(ox+tside, gty+2.26, 0); ugAdd(tflame);
+      ugAdd(glowSprite(0xff8830, 1.1, ox+tside, gty+2.3, 0, 0.6));
       var tL=new THREE.PointLight(0xff9930,1.0,4.5);
       tL.position.set(ox+tside, gty+2.4, 0); ugGroup.add(tL);
     });
@@ -604,6 +720,33 @@
     gbeam2u.position.set(0, gty+3.72, 0); ugAdd(gbeam2u);
     var garch=new THREE.Mesh(new THREE.BoxGeometry(1.5,2.2,0.05), gWoodDarkest);
     garch.position.set(0, gty+1.1, -0.32); ugAdd(garch);
+    // wooden door panels standing open toward the village
+    [-1,1].forEach(function(side){
+      var hingeX=side*0.8, openA=-side*0.7;
+      var panel=new THREE.Mesh(new THREE.BoxGeometry(0.76,2.05,0.07), fmf(0x5a3212));
+      panel.position.set(hingeX - side*0.38*Math.cos(openA), gty+1.03, -0.38*Math.sin(0.7));
+      panel.rotation.y=openA; panel.castShadow=true; ugAdd(panel);
+      // door plank lines
+      [-0.22,0,0.22].forEach(function(px){
+        var plank=new THREE.Mesh(new THREE.BoxGeometry(0.05,1.95,0.02), fmf(0x3f2008));
+        plank.position.set(hingeX - side*(0.38+px)*Math.cos(openA), gty+1.03, -(0.38+px)*Math.sin(0.7)-0.05);
+        plank.rotation.y=openA; ugAdd(plank);
+      });
+    });
+    // golden Saulė sun-disc above the lintel
+    var saulMat=bm(0xffd700, 0.6);
+    var saulRing=new THREE.Mesh(new THREE.TorusGeometry(0.34,0.045,6,20), saulMat);
+    saulRing.position.set(0, gty+4.35, 0); ugAdd(saulRing);
+    for(var sr5=0; sr5<8; sr5++){
+      var ra=sr5/8*Math.PI*2;
+      var ray=new THREE.Mesh(new THREE.BoxGeometry(0.035,0.20,0.035), saulMat);
+      ray.position.set(Math.cos(ra)*0.46, gty+4.35+Math.sin(ra)*0.46, 0);
+      ray.rotation.z=ra-Math.PI/2; ugAdd(ray);
+    }
+    var saulCore=new THREE.Mesh(new THREE.CircleGeometry(0.13,8), saulMat);
+    saulCore.position.set(0, gty+4.35, 0.01); ugAdd(saulCore);
+    var saulPole=new THREE.Mesh(new THREE.CylinderGeometry(0.035,0.035,0.55,5,1), gWoodDarkest);
+    saulPole.position.set(0, gty+3.95, 0); ugAdd(saulPole);
 
     // ── VILLAGE ENTRANCE GATE — group for matching rotation ──
     var entMat  = fmf(0x7a4820);
@@ -623,6 +766,23 @@
     entBeam.position.set(0, MW+3.5, 0); egAdd(entBeam);
     var entBeam2=new THREE.Mesh(new THREE.BoxGeometry(3.0,0.14,0.20),entMat);
     entBeam2.position.set(0, MW+3.78, 0); egAdd(entBeam2);
+    // small gabled roof over the beam — lych-gate style
+    var egRoofGeo=new THREE.CylinderGeometry(0.42,0.42,3.1,3,1,false,Math.PI);
+    egRoofGeo.rotateX(Math.PI/2);
+    var egRoof=new THREE.Mesh(egRoofGeo, fmf(0x8a5a28));
+    egRoof.scale.y=0.7;
+    egRoof.position.set(0, MW+3.9+0.5*0.42*0.7, 0);
+    egRoof.rotation.y=Math.PI/2; egRoof.castShadow=true; egAdd(egRoof);
+    var egRidgeY=MW+3.9+1.5*0.42*0.7;
+    // žirgeliai at both ends of the little roof ridge
+    [-1.55,1.55].forEach(function(ex3){
+      [-0.5,0.5].forEach(function(tilt){
+        var zb2=new THREE.Mesh(new THREE.BoxGeometry(0.03,0.30,0.03), fmf(0x6a4018));
+        zb2.position.set(ex3, egRidgeY+0.06, 0);
+        zb2.rotation.set(0, Math.PI/2, tilt);
+        egAdd(zb2);
+      });
+    });
     var plate=new THREE.Mesh(new THREE.BoxGeometry(1.4,0.48,0.12),fmf(0x3a1e06));
     plate.position.set(0, MW+2.6, -0.08); egAdd(plate);
 
@@ -633,6 +793,7 @@
       tbowl.position.set(p[0], MW+2.12, p[1]); egAdd(tbowl);
       var tfire=new THREE.Mesh(new THREE.ConeGeometry(0.10,0.32,6,1),bm(0xff8820,0.9));
       tfire.position.set(p[0], MW+2.38, p[1]); egAdd(tfire);
+      egAdd(glowSprite(0xff8830, 1.3, p[0], MW+2.45, p[1], 0.6));
       var tL=new THREE.PointLight(0xff9930, 1.2, 5.0);
       tL.position.set(p[0], MW+2.5, p[1]); egAdd(tL);
     });
@@ -666,6 +827,38 @@
       }
     }
 
+    // stair handrails — posts every 3rd step, rails connecting the post tops
+    function railSeg(x1,y1,z1,x2,y2,z2){
+      var dx=x2-x1,dy=y2-y1,dz=z2-z1,len=Math.sqrt(dx*dx+dy*dy+dz*dz);
+      if(len<0.01) return;
+      var m=new THREE.Mesh(new THREE.CylinderGeometry(0.035,0.035,len,5,1),fmf(0x8a5a28));
+      m.position.set((x1+x2)/2,(y1+y2)/2,(z1+z2)/2);
+      m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), new THREE.Vector3(dx/len,dy/len,dz/len));
+      scene.add(m);
+    }
+    var railTopsL=[], railTopsR=[];
+    [0,3,6,9,12,15,17].forEach(function(i){
+      var t3=i/(STEPS-1), ra4=t3*0.55, rr4=11.0-t3*3.2;
+      var ry4=MW+t3*4.5, rw4=2.2-t3*0.5;
+      var cx4=Math.sin(ra4)*rr4, cz4=Math.cos(ra4)*rr4;
+      var exd=Math.cos(ra4), ezd=Math.sin(ra4); // step local x direction
+      [[-1,railTopsL],[1,railTopsR]].forEach(function(sd){
+        var px4=cx4+sd[0]*(rw4/2-0.08)*exd, pz4=cz4+sd[0]*(rw4/2-0.08)*ezd;
+        var post=new THREE.Mesh(new THREE.CylinderGeometry(0.045,0.055,0.85,5,1), fmf(0x6a4018));
+        post.position.set(px4, ry4+0.42, pz4); post.castShadow=true; scene.add(post);
+        sd[1].push([px4, ry4+0.85, pz4]);
+      });
+    });
+    [railTopsL, railTopsR].forEach(function(tops){
+      for(var ri4=0; ri4<tops.length-1; ri4++){
+        railSeg(tops[ri4][0],tops[ri4][1],tops[ri4][2], tops[ri4+1][0],tops[ri4+1][1],tops[ri4+1][2]);
+      }
+    });
+
+    // landing slab at the stair base
+    var landing=new THREE.Mesh(new THREE.BoxGeometry(2.8,0.16,1.3), fmf(0x9a6a38));
+    landing.position.set(0, MW+0.08, 11.9); landing.receiveShadow=true; scene.add(landing);
+
     // Longhouses — ring + center layout like the reference
     var plY = MW+4.5+0.65;
     var longDefs = [
@@ -683,12 +876,53 @@
       [ 3.5,  2.8, 5.0,  2.8, 1.2],
       [-1.8,  3.8, 1.8,  2.6, 1.2],
     ];
+    // house styles inspired by Baltic fishing huts — varied walls, gabled roofs
+    // [wallColor, roofColor, wallHeight, hasChimney]
+    var houseStyles=[
+      [0x5a4330, 0x8a8478, 1.30, true ],  // dark timber, gray shingle
+      [0xf2ead8, 0xb89868, 1.20, false],  // whitewashed, tan shingle
+      [0x9a8c76, 0x6a5f52, 1.40, true ],  // weathered gray, dark roof
+      [0xc89858, 0xb44a20, 1.25, false],  // honey planks, rust red
+      [0xe4cd9a, 0x8a6a48, 1.30, false],  // pale plaster, brown shingle
+      [0x6e5844, 0x77705e, 1.35, true ]   // mid timber, slate gray
+    ];
+    var platTop = MW+4.5;
     longDefs.forEach(function(h,hi){
-      var lw = new THREE.Mesh(new THREE.BoxGeometry(h[3],1.3,h[4]), fmf(0xf0ddb0));
-      lw.position.set(h[0],plY,h[1]); lw.rotation.y=h[2]; lw.castShadow=true; lw.receiveShadow=true; scene.add(lw);
+      var st=houseStyles[hi%houseStyles.length];
+      var ht=st[2];
+      var lw = new THREE.Mesh(new THREE.BoxGeometry(h[3],ht,h[4]), fmf(st[0]));
+      lw.position.set(h[0],platTop+ht/2,h[1]); lw.rotation.y=h[2]; lw.castShadow=true; lw.receiveShadow=true; scene.add(lw);
       if (hi===0) tag(lw, loreData.longhouse.world, loreData.longhouse.title, loreData.longhouse.text);
-      var lr = new THREE.Mesh(new THREE.CylinderGeometry(0.05,h[4]*1.15,1.0,4,1), fmf(0xcc4a18));
-      lr.position.set(h[0],plY+1.15,h[1]); lr.rotation.y=h[2]+Math.PI/4; scene.add(lr);
+      // gabled roof — triangular prism running the house length
+      var rr=h[4]*0.72, sy=0.8;
+      var roofGeo=new THREE.CylinderGeometry(rr,rr,h[3]*1.10,3,1,false,Math.PI);
+      roofGeo.rotateX(Math.PI/2);
+      var lr=new THREE.Mesh(roofGeo, fmf(st[1]));
+      var wallTop=platTop+ht;
+      lr.scale.y=sy;
+      lr.position.set(h[0], wallTop+0.5*rr*sy, h[1]);
+      lr.rotation.y=h[2]+Math.PI/2; lr.castShadow=true; scene.add(lr);
+      var ridgeY=wallTop+1.5*rr*sy;
+      // dark door on the long front wall
+      var doorX=h[0]+Math.sin(h[2])*(h[4]/2+0.02), doorZ=h[1]+Math.cos(h[2])*(h[4]/2+0.02);
+      var door=new THREE.Mesh(new THREE.BoxGeometry(0.34,0.68,0.05), fmf(0x2e1c0c));
+      door.position.set(doorX, platTop+0.35, doorZ); door.rotation.y=h[2]; scene.add(door);
+      // chimney on some houses
+      if (st[3]) {
+        var chim=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.42,0.18), fmf(0x9a9288));
+        chim.position.set(h[0]+Math.cos(h[2])*h[3]*0.24, ridgeY-0.02, h[1]-Math.sin(h[2])*h[3]*0.24);
+        chim.rotation.y=h[2]; scene.add(chim);
+      }
+      // žirgeliai — crossed boards at both gable ends of the ridge
+      [-1,1].forEach(function(end){
+        var ex2=h[0]+Math.cos(h[2])*(h[3]/2)*end, ez2=h[1]-Math.sin(h[2])*(h[3]/2)*end;
+        [-0.5,0.5].forEach(function(tilt){
+          var zb=new THREE.Mesh(new THREE.BoxGeometry(0.035,0.38,0.035), fmf(0x6a4018));
+          zb.position.set(ex2, ridgeY+0.08, ez2);
+          zb.rotation.set(0, h[2]-Math.PI/2, tilt);
+          scene.add(zb);
+        });
+      });
     });
 
     // White tents
@@ -744,10 +978,16 @@
       [-0.06,0.06, 0.16, 1.2, 0xffee44],
       [0,    0,    0.10, 0.9, 0xffffff]
     ];
-    flameDefs.forEach(function(f){
+    var mwFlames=[];
+    flameDefs.forEach(function(f,fi){
       var fl=new THREE.Mesh(new THREE.ConeGeometry(f[2],f[3],5,1),bm(f[4],0.88));
       fl.position.set(f[0],fireBase+f[3]/2+0.2,f[1]); scene.add(fl);
+      mwFlames.push({m:fl, baseY:fireBase+f[3]/2+0.2, halfH:f[3]/2, ph:fi*1.7});
     });
+    // layered warm glow around the bonfire — fake bloom
+    var fireGlowA=glowSprite(0xff6600, 7.0, 0, fireBase+1.4, 0, 0.55);
+    var fireGlowB=glowSprite(0xffcc44, 3.2, 0, fireBase+1.6, 0, 0.75);
+    scene.add(fireGlowA); scene.add(fireGlowB);
     // two point lights — orange base + pale yellow tip
     var mwFireL=new THREE.PointLight(0xff6600,4.0,18); mwFireL.position.set(0,fireBase+1.2,0); scene.add(mwFireL);
     var mwFireL2=new THREE.PointLight(0xffaa44,2.0,10); mwFireL2.position.set(0,fireBase+2.5,0); scene.add(mwFireL2);
@@ -782,6 +1022,76 @@
       ob.position.set(p[0],MW+0.5,p[1]); ob.castShadow=true; scene.add(ob);
       var or2 = new THREE.Mesh(new THREE.ConeGeometry(1.3,0.9,4,1), fmf(0xc44a18));
       or2.position.set(p[0],MW+1.45,p[1]); or2.rotation.y=Math.PI/4; scene.add(or2);
+    });
+
+    // ── VILLAGE LIFE — well, gardens, haystacks, animal pen ──
+    // village well near the path
+    var wellX=5.0, wellZ=10.5;
+    var wellRing=new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.55,0.5,8,1), fmf(0x8a7a68));
+    wellRing.position.set(wellX,MW+0.25,wellZ); wellRing.castShadow=true; scene.add(wellRing);
+    var wellHole=new THREE.Mesh(new THREE.CircleGeometry(0.38,8), fmf(0x1a2028));
+    wellHole.rotation.x=-Math.PI/2; wellHole.position.set(wellX,MW+0.51,wellZ); scene.add(wellHole);
+    [-0.55,0.55].forEach(function(side){
+      var wp=new THREE.Mesh(new THREE.BoxGeometry(0.08,1.3,0.08), fmf(0x5a3a1c));
+      wp.position.set(wellX+side,MW+0.65,wellZ); scene.add(wp);
+    });
+    var wellRoof=new THREE.Mesh(new THREE.ConeGeometry(0.85,0.55,4,1), fmf(0x9a5a28));
+    wellRoof.position.set(wellX,MW+1.6,wellZ); wellRoof.rotation.y=Math.PI/4; wellRoof.castShadow=true; scene.add(wellRoof);
+    var wellBar=new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.04,1.15,5,1), fmf(0x4a2c12));
+    wellBar.rotation.z=Math.PI/2; wellBar.position.set(wellX,MW+1.15,wellZ); scene.add(wellBar);
+    var wellBucket=new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.07,0.14,6,1), fmf(0x6a4826));
+    wellBucket.position.set(wellX,MW+0.75,wellZ); scene.add(wellBucket);
+
+    // garden plots — tilled dirt beds with crop rows (west of the path)
+    [[-6.5,9.5,0.25],[-9.8,5.6,-0.15]].forEach(function(gp){
+      var bed=new THREE.Mesh(new THREE.BoxGeometry(2.4,0.12,1.6), fmf(0x5a4028));
+      bed.position.set(gp[0],MW+0.06,gp[1]); bed.rotation.y=gp[2]; bed.receiveShadow=true; scene.add(bed);
+      for(var ri=0;ri<4;ri++){
+        var row=new THREE.Mesh(new THREE.BoxGeometry(2.1,0.14,0.16), fmf(ri%2===0?0x4a7c2a:0x568834));
+        var lz=-0.55+ri*0.37;
+        row.position.set(gp[0]-Math.sin(gp[2])*lz, MW+0.17, gp[1]+Math.cos(gp[2])*lz);
+        row.rotation.y=gp[2]; scene.add(row);
+      }
+    });
+
+    // haystacks near the gardens
+    [[-4.2,10.3],[-8.6,7.2]].forEach(function(hp){
+      var hay=new THREE.Mesh(new THREE.ConeGeometry(0.75,1.25,7,1), fmf(0xd8b868));
+      hay.position.set(hp[0],MW+0.62,hp[1]); hay.castShadow=true; scene.add(hay);
+      var hayPole=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,0.4,4,1), fmf(0x5a3a1c));
+      hayPole.position.set(hp[0],MW+1.4,hp[1]); scene.add(hayPole);
+    });
+
+    // animal pen with sheep — west side
+    var penX=-8.5, penZ=-2.0, penW=4.2, penD=3.0;
+    [[-penW/2,-penD/2],[penW/2,-penD/2],[-penW/2,penD/2],[penW/2,penD/2]].forEach(function(c){
+      var pp=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.08,0.9,5,1), fmf(0x6a4826));
+      pp.position.set(penX+c[0],MW+0.45,penZ+c[1]); scene.add(pp);
+    });
+    [[0,-penD/2,penW,0],[0,penD/2,penW,0],[-penW/2,0,penD,Math.PI/2],[penW/2,0,penD,Math.PI/2]].forEach(function(r){
+      [0.35,0.7].forEach(function(ry){
+        var rail=new THREE.Mesh(new THREE.BoxGeometry(r[2],0.06,0.06), fmf(0x7a5a34));
+        rail.position.set(penX+r[0],MW+ry,penZ+r[1]); rail.rotation.y=r[3]; scene.add(rail);
+      });
+    });
+    // sheep — plump white bodies with dark heads; one dark goat
+    [[-1.2,-0.5,0.4,0xf0ece0],[0.3,0.6,2.1,0xf0ece0],[1.1,-0.7,3.6,0xe8e2d2],[-0.2,-1.0,1.0,0x4a3a2c]].forEach(function(s){
+      var body=new THREE.Mesh(new THREE.SphereGeometry(0.30,7,5), fmf(s[3]));
+      body.scale.set(1.35,1.0,0.95);
+      body.position.set(penX+s[0],MW+0.34,penZ+s[1]); body.rotation.y=s[2]; body.castShadow=true; scene.add(body);
+      var head=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.16,0.18), fmf(s[3]===0x4a3a2c?0x3a2c20:0x3a3028));
+      head.position.set(penX+s[0]+Math.cos(s[2])*0.42, MW+0.42, penZ+s[1]-Math.sin(s[2])*0.42);
+      head.rotation.y=s[2]; scene.add(head);
+    });
+
+    // firewood stacks — one by the well, one by the pen
+    [[6.6,9.2,0.3],[-6.9,-1.6,1.2]].forEach(function(fw){
+      for(var li2=0;li2<5;li2++){
+        var lx2=(li2%3)*0.19-0.19, ly2=Math.floor(li2/3)*0.17+0.09;
+        var wlog=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,0.85,5,1), fmf(li2%2===0?0x6a4826:0x7a5430));
+        wlog.rotation.z=Math.PI/2; wlog.rotation.y=fw[2];
+        wlog.position.set(fw[0]+Math.cos(fw[2])*lx2, MW+ly2, fw[1]-Math.sin(fw[2])*lx2); scene.add(wlog);
+      }
     });
 
     // ── LAKE — crescent wrapping around front-right of mound
@@ -1252,10 +1562,11 @@
       bm2.position.set(mx,my,mz);
       var up=new THREE.Vector3(0,1,0), dir=new THREE.Vector3(nx,ny,nz);
       bm2.quaternion.setFromUnitVectors(up,dir); scene.add(bm2);
-      // glowing halo disc at tip
-      var halM=new THREE.MeshPhongMaterial({color:col,emissive:col,emissiveIntensity:0.55,flatShading:false,transparent:true,opacity:0.35});
-      var hal=new THREE.Mesh(new THREE.SphereGeometry(sc*1.7,8,5),halM);
-      hal.scale.y=0.35; hal.position.set(cx,cy,cz); scene.add(hal);
+      // additive glow sprite — fake bloom around the body
+      var glowMat=new THREE.SpriteMaterial({map:glowTex,color:col,blending:THREE.AdditiveBlending,transparent:true,depthWrite:false,opacity:0.85});
+      var glow=new THREE.Sprite(glowMat);
+      var gs=(type===1? 7.0 : 4.5)*sc;
+      glow.scale.set(gs,gs,1); glow.position.set(cx,cy,cz); scene.add(glow);
       if(type===1){
         // Sun: bright sphere + outer ring
         var sunM=new THREE.MeshPhongMaterial({color:0xffee44,emissive:0xffcc00,emissiveIntensity:0.9,flatShading:false});
@@ -1282,6 +1593,23 @@
         if(sc>0.65){ var pL3=new THREE.PointLight(col,0.6,14); pL3.position.set(cx,cy,cz); scene.add(pL3); }
       }
     });
+
+    // soul-birds — the souls of the dead resting as birds, circling the crown
+    var birds=[];
+    for(var bi=0;bi<6;bi++){
+      var bg=new THREE.Group();
+      var bBody=new THREE.Mesh(new THREE.ConeGeometry(0.10,0.46,4,1), fmf(0xf2f4f8));
+      bBody.rotation.x=Math.PI/2; bg.add(bBody);
+      var wingGeoL=new THREE.BoxGeometry(0.52,0.02,0.18); wingGeoL.translate(-0.26,0,0);
+      var wingL=new THREE.Mesh(wingGeoL, fmf(0xe4eaf2)); bg.add(wingL);
+      var wingGeoR=new THREE.BoxGeometry(0.52,0.02,0.18); wingGeoR.translate(0.26,0,0);
+      var wingR=new THREE.Mesh(wingGeoR, fmf(0xe4eaf2)); bg.add(wingR);
+      bg.scale.setScalar(1.7);
+      scene.add(bg);
+      birds.push({g:bg, wl:wingL, wr:wingR,
+        r:13.0+(bi%3)*1.5, h:11.5+(bi%3)*0.7,
+        ph:bi*1.05, sp:0.55+(bi%2)*0.15, dir:bi%2===0?1:-1});
+    }
 
     // gold portal ring at trunk entry
     var grMat = bm(0xffd700, 0.5);
@@ -1491,6 +1819,20 @@
       fpL.intensity    = 2.0 + 0.7*Math.sin(t*2.8);
       mwFireL.intensity  = 3.5 + 1.2*Math.sin(t*3.1+0.4);
       mwFireL2.intensity = 1.5 + 0.8*Math.sin(t*2.7+1.1);
+      // flame cones flicker — each layer wobbles at its own rate
+      for (var fi2=0; fi2<mwFlames.length; fi2++) {
+        var flm=mwFlames[fi2];
+        var fw=1+0.13*Math.sin(t*7+flm.ph)+0.07*Math.sin(t*13+flm.ph*2.3);
+        flm.m.scale.set(1+0.08*Math.sin(t*9+flm.ph), fw, 1+0.08*Math.cos(t*8+flm.ph));
+        flm.m.position.y=flm.baseY + flm.halfH*(fw-1);
+        flm.m.rotation.y=t*0.6+flm.ph;
+      }
+      // fire glow breathes with the light flicker
+      var fg=1+0.18*Math.sin(t*3.1+0.4)+0.08*Math.sin(t*8.7);
+      fireGlowA.scale.set(7.0*fg,7.0*fg,1);
+      fireGlowB.scale.set(3.2*fg,3.2*fg,1);
+      fireGlowA.material.opacity=0.45+0.14*Math.sin(t*3.1+0.4);
+      fireGlowB.material.opacity=0.65+0.12*Math.sin(t*5.3);
       // animate smoke rising
       var sp=smokePosAttr.array;
       for (var si=0; si<smokeCount; si++) {
@@ -1505,6 +1847,15 @@
       smokeMesh.material.opacity=0.28+0.07*Math.sin(t*0.5);
       waterMat.emissiveIntensity = 0.8 + 0.3*Math.sin(t*0.7);
       uwMistMat.opacity = 0.3 + 0.1*Math.sin(t*0.9);
+      // soul-birds circling the crown
+      for(var bi2=0;bi2<birds.length;bi2++){
+        var bd=birds[bi2];
+        var ba=t*bd.sp*bd.dir+bd.ph;
+        bd.g.position.set(Math.cos(ba)*bd.r, SW+bd.h+Math.sin(t*1.5+bd.ph)*0.5, Math.sin(ba)*bd.r);
+        bd.g.rotation.y=(bd.dir>0? -ba : Math.PI-ba);
+        var flap=Math.sin(t*9+bd.ph*2)*0.5;
+        bd.wl.rotation.z=flap; bd.wr.rotation.z=-flap;
+      }
       rend.render(scene, cam);
     })();
   })();
