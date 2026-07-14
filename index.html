@@ -15,14 +15,25 @@
     button {
       background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.4);
       color: #fff; padding: 8px 18px; border-radius: 20px; cursor: pointer;
-      font-size: 14px; backdrop-filter: blur(6px); transition: background 0.2s;
+      font-size: 13px; letter-spacing: 0.05em; backdrop-filter: blur(8px);
+      transition: background 0.2s, border-color 0.2s;
     }
-    button:hover { background: rgba(255,255,255,0.32); }
+    button:hover { background: rgba(255,255,255,0.32); border-color: rgba(255,255,255,0.7); }
     #label {
       position: fixed; top: 24px; left: 50%; transform: translateX(-50%);
       color: rgba(255,255,255,0.7); font-size: 13px; letter-spacing: 0.08em;
       text-transform: uppercase; pointer-events: none;
+      transition: opacity 1.2s;
     }
+    #label.fade { opacity: 0; }
+    #codex {
+      position: fixed; top: 14px; left: 16px; z-index: 150;
+      background: rgba(255,255,255,0.16); border: 1px solid rgba(255,255,255,0.35);
+      border-radius: 20px; padding: 6px 14px; color: #fff;
+      font: 14px/1.4 monospace; letter-spacing: 0.06em; user-select: none;
+      backdrop-filter: blur(8px); transition: transform 0.25s;
+    }
+    #codex.pulse { transform: scale(1.15); }
     #walk-overlay {
       display: none; position: fixed; inset: 0;
       align-items: center; justify-content: center; flex-direction: column; gap: 12px;
@@ -84,6 +95,7 @@
 <body>
   <div id="vc"></div>
   <div id="label">Drag to rotate &nbsp;·&nbsp; Scroll to zoom</div>
+  <div id="codex">✦ <span id="codex-count">0 / 0</span></div>
   <div id="ui">
     <button onclick="goUpper()">Sky world</button>
     <button onclick="goMiddle()">Hillfort</button>
@@ -106,6 +118,7 @@
   <div id="walk-hint">WASD to move &nbsp;·&nbsp; Esc to exit walk mode</div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/exporters/GLTFExporter.js"></script>
   <script>
   (function(){
     var el = document.getElementById('vc');
@@ -173,10 +186,10 @@
     }
     updCam();
 
-    window.goAll    = function(){ tTh=0.9;  tPh=1.05; tRd=62; tLookY=5;   };
+    window.goAll    = function(){ tTh=0.9;  tPh=1.05; tRd=72; tLookY=5;   };
     window.goUpper  = function(){ tTh=0.7;  tPh=0.6;  tRd=40; tLookY=24;  };
-    window.goMiddle = function(){ tTh=0.85; tPh=0.88; tRd=26; tLookY=3;   };
-    window.goLower  = function(){ tTh=0.5;  tPh=1.35; tRd=30; tLookY=-14; };
+    window.goMiddle = function(){ tTh=0.85; tPh=0.88; tRd=44; tLookY=3;   };
+    window.goLower  = function(){ tTh=0.5;  tPh=1.42; tRd=52; tLookY=-16; };
 
     window.addEventListener('resize', function(){
       W = window.innerWidth; H = window.innerHeight;
@@ -194,14 +207,17 @@
     }
 
     // ── LIGHTS ──────────────────────────────────────────
-    scene.add(new THREE.HemisphereLight(0x4dc1ff, 0xffdca8, 0.5));
-    scene.add(new THREE.AmbientLight(0xa68195, 0.35));
+    var hemiL = new THREE.HemisphereLight(0x4dc1ff, 0xffdca8, 0.5); scene.add(hemiL);
+    var ambL  = new THREE.AmbientLight(0xa68195, 0.35); scene.add(ambL);
     var sun = new THREE.DirectionalLight(0xffd1d1, 3.5);
     sun.position.set(14, 18, 10); sun.castShadow = true;
-    sun.shadow.mapSize.width = 2048; sun.shadow.mapSize.height = 2048;
-    sun.shadow.camera.left=-28; sun.shadow.camera.right=28;
-    sun.shadow.camera.top=28; sun.shadow.camera.bottom=-28;
-    sun.shadow.radius = 3;
+    sun.shadow.mapSize.width = 4096; sun.shadow.mapSize.height = 4096;
+    sun.shadow.camera.left=-40; sun.shadow.camera.right=40;
+    sun.shadow.camera.top=40; sun.shadow.camera.bottom=-40;
+    sun.shadow.camera.near = 1; sun.shadow.camera.far = 100;
+    sun.shadow.bias = -0.0004;       // pull the depth test back to kill self-shadow acne
+    sun.shadow.normalBias = 0.035;   // offset along normals — fixes acne at grazing sun angles
+    sun.shadow.radius = 2.5;
     scene.add(sun);
 
     var fireL  = new THREE.PointLight(0xffffff, 4.0, 34); fireL.position.set(0,-16,0);   scene.add(fireL);
@@ -212,6 +228,51 @@
     var eL2    = new THREE.PointLight(0xdddddd, 1.2, 10); eL2.position.set(-6,-20,-4);   scene.add(eL2);
     var fpL    = new THREE.PointLight(0xff8800, 2.5, 10); fpL.position.set(0,5.5,0);     scene.add(fpL);
     var skyL   = new THREE.PointLight(0xffd700, 1.8, 60); skyL.position.set(0,30,0);     scene.add(skyL);
+
+    // ── DAY/NIGHT — synced to the real local clock (Animal Crossing style) ──
+    var dnSkyDayTop   = new THREE.Color(0x7fa4c4), dnSkyDayBot   = new THREE.Color(0xb4c8cc);
+    var dnSkyNightTop = new THREE.Color(0x0c1424), dnSkyNightBot = new THREE.Color(0x1a2636);
+    var dnSkyDuskTop  = new THREE.Color(0x50587e), dnSkyDuskBot  = new THREE.Color(0xe09868);
+    var dnSunDay = new THREE.Color(0xffd1d1), dnSunNight = new THREE.Color(0x8fa8d4), dnSunDusk = new THREE.Color(0xffa060);
+    var dnTop=new THREE.Color(), dnBot=new THREE.Color(), dnSun=new THREE.Color();
+    var timeOverride = null; // minutes 0..1439, or null = real clock
+    function dayMinutes(){
+      if (timeOverride!==null) return timeOverride;
+      var d=new Date();
+      return d.getHours()*60 + d.getMinutes() + d.getSeconds()/60;
+    }
+    function updateDayNight(){
+      var mins=dayMinutes(), dayT=mins/1440;
+      var ang=(dayT-0.25)*Math.PI*2;      // 06:00 sunrise east, 18:00 sunset west
+      var se=Math.sin(ang);               // sun elevation, -1..1
+      // daylight factor with smooth twilight band
+      var dl=Math.max(0, Math.min(1, (se+0.12)/0.34));
+      dl=dl*dl*(3-2*dl);
+      // dusk/dawn warmth peaks when the sun crosses the horizon
+      var dusk=Math.max(0, 1-Math.abs(se)/0.30); dusk*=dusk;
+      // sun by day, mirrored moon by night — light always from above
+      if (se>=0) sun.position.set(Math.cos(ang)*26, se*30+3, 10);
+      else       sun.position.set(-Math.cos(ang)*26, -se*30+3, 10);
+      sun.intensity = 0.45 + 3.05*dl;
+      dnSun.copy(dnSunNight).lerp(dnSunDay, dl).lerp(dnSunDusk, dusk*0.65);
+      sun.color.copy(dnSun);
+      hemiL.intensity = 0.5*(0.35 + 0.65*dl);
+      ambL.intensity  = 0.35*(0.45 + 0.55*dl);
+      // sky dome + fog
+      dnTop.copy(dnSkyNightTop).lerp(dnSkyDayTop, dl).lerp(dnSkyDuskTop, dusk*0.7);
+      dnBot.copy(dnSkyNightBot).lerp(dnSkyDayBot, dl).lerp(dnSkyDuskBot, dusk*0.8);
+      skyDome.material.uniforms.topCol.value.copy(dnTop);
+      skyDome.material.uniforms.bottomCol.value.copy(dnBot);
+      scene.fog.color.copy(dnBot);
+      // clock readout
+      if (dnClockEl){
+        var hh=Math.floor(mins/60), mm=Math.floor(mins%60);
+        dnClockEl.textContent=(hh<10?'0':'')+hh+':'+(mm<10?'0':'')+mm+(timeOverride!==null?' ⏸':'');
+      }
+    }
+    var dnClockEl=null; // bound by the time-panel script at the bottom of the page
+    window._bindClock = function(el){ dnClockEl = el; updateDayNight(); };
+    window._setTimeOverride = function(v){ timeOverride = v; updateDayNight(); }; // null = real clock
 
     // ── LORE ────────────────────────────────────────────
     var clickables = [];
@@ -281,7 +342,7 @@
     // main trunk — starts just above underworld, only visible from MW upward
     // segment: y=-4 to y=4 (the section between underworld and hillfort)
     var midTrunk = new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.55,8,7,1), fmf(barkMid));
-    midTrunk.position.y = 0; midTrunk.castShadow=true; scene.add(midTrunk);
+    midTrunk.position.y = 0; midTrunk.castShadow=false; scene.add(midTrunk); // sacred tree casts no shadow on the village
     tag(midTrunk, loreData.tree.world, loreData.tree.title, loreData.tree.text);
 
     // gnarled sub-trunks — only above ground, start at y=-3
@@ -289,7 +350,7 @@
      [-0.14, 0.0, -0.10, 6, -3],
      [ 0.0,  0.10, 0.0,  5, -3]].forEach(function(g){
       var gt=new THREE.Mesh(new THREE.CylinderGeometry(0.12,0.18,g[3],6,1),fmf(barkDark));
-      gt.position.set(g[0],g[4]+g[3]/2,g[2]); gt.rotation.z=g[1]*0.3; gt.castShadow=true; scene.add(gt);
+      gt.position.set(g[0],g[4]+g[3]/2,g[2]); gt.rotation.z=g[1]*0.3; gt.castShadow=false; scene.add(gt);
     });
 
     // bark bump details along the visible mid-trunk
@@ -301,7 +362,7 @@
 
     // upper trunk — solid from y=11, oak brown
     var solidTrunk = new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.34,7.5,7,1), fmf(barkLight));
-    solidTrunk.position.y = 11.0 + 7.5/2; solidTrunk.castShadow=true; scene.add(solidTrunk);
+    solidTrunk.position.y = 11.0 + 7.5/2; solidTrunk.castShadow=false; scene.add(solidTrunk);
 
     // large spreading oak branches from upper trunk
     var branchDefs = [
@@ -323,7 +384,7 @@
       var mid=new THREE.Vector3().addVectors(from,to).multiplyScalar(0.5);
       var curve=new THREE.CatmullRomCurve3([from, mid.clone().add(new THREE.Vector3((Math.random()-0.5)*1.5,0,(Math.random()-0.5)*1.5)), to]);
       var geo=new THREE.TubeGeometry(curve,10,b[6],6,false);
-      var mesh=new THREE.Mesh(geo,fmf(barkLight)); mesh.castShadow=true; scene.add(mesh);
+      var mesh=new THREE.Mesh(geo,fmf(barkLight)); mesh.castShadow=false; scene.add(mesh);
     });
 
     // fade-in segments where trunk materialises above the hillfort
@@ -360,13 +421,13 @@
 
     // ── UNDERWORLD ──────────────────────────────────────
     var UW = -18;
-    // ground layers — near-black to dark gray
-    [[16,0.8,0x0a0a0a],[13,0.7,0x111111],[10,0.6,0x080808]].forEach(function(d,i){
-      var layer = new THREE.Mesh(new THREE.CylinderGeometry(d[0]-i,d[0],d[1],10,1), fmf(d[2]));
-      layer.position.y = UW-0.4-i*0.5; scene.add(layer);
+    // ground layers — near-black to dark gray (widened to match the earth above)
+    [[26,0.9,0x0a0a0a],[21,0.8,0x111111],[16,0.7,0x080808]].forEach(function(d,i){
+      var layer = new THREE.Mesh(new THREE.CylinderGeometry(d[0]-i,d[0],d[1],14,1), fmf(d[2]));
+      layer.position.y = UW-0.45-i*0.55; scene.add(layer);
     });
     // flat ground plane — black
-    var uwGround = new THREE.Mesh(new THREE.CircleGeometry(16,14), fmf(0x0d0d0d));
+    var uwGround = new THREE.Mesh(new THREE.CircleGeometry(26,20), fmf(0x0d0d0d));
     uwGround.rotation.x=-Math.PI/2; uwGround.position.y=UW-0.02; scene.add(uwGround);
 
     // water/void pool — dark mirror, bright white emissive shimmer
@@ -387,11 +448,11 @@
     });
 
     // horizon fog ring — pale white mist at edge
-    var horizonRing = new THREE.Mesh(new THREE.RingGeometry(13,17,32), new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.06,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide}));
+    var horizonRing = new THREE.Mesh(new THREE.RingGeometry(21,27,40), new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.06,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide}));
     horizonRing.rotation.x=-Math.PI/2; horizonRing.position.y=UW+0.1; scene.add(horizonRing);
 
     // stone dome structures at perimeter — dark gray
-    [[0.4,13],[1.3,14],[2.2,12],[3.5,13],[4.8,14],[5.6,12]].forEach(function(d){
+    [[0.4,20],[1.3,22],[2.2,19],[3.5,21],[4.8,23],[5.6,19],[0.9,15],[2.9,16],[4.2,15],[5.9,16]].forEach(function(d){
       var dx=Math.cos(d[0])*d[1], dz=Math.sin(d[0])*d[1];
       var dome=new THREE.Mesh(new THREE.SphereGeometry(1.4+Math.random()*0.6,8,6,0,Math.PI*2,0,Math.PI/2),fmf(0x222222));
       dome.position.set(dx,UW+0.1,dz); scene.add(dome);
@@ -418,10 +479,13 @@
     makeUWPlant(8, 4, 6.5);
     makeUWPlant(-6, 7, 4.5);
     makeUWPlant(4, -9, 5.0);
+    makeUWPlant(16, 9, 5.5);
+    makeUWPlant(-15, -11, 6.0);
+    makeUWPlant(-12, 14, 4.8);
 
-    // dense low shrubs — dark gray lumps
-    for (var i=0; i<28; i++) {
-      var sa=i/28*Math.PI*2, sr=8+Math.random()*5;
+    // dense low shrubs — dark gray lumps, spread across the wider floor
+    for (var i=0; i<44; i++) {
+      var sa=i/44*Math.PI*2, sr=8+Math.random()*15;
       var sx=Math.cos(sa)*sr, sz=Math.sin(sa)*sr;
       var sh=0.4+Math.random()*0.6;
       var shrub=new THREE.Mesh(new THREE.SphereGeometry(sh,5,4),fmf(i%2===0?0x1a1a1a:0x141414));
@@ -637,7 +701,8 @@
       [0.80,   0.80+step*2,   4, -5,  10, -10,  13, 0.50, 0.28, 0],
       [2.90,   2.90-step*2,   4, -5,   9, -10,  12, 0.48, 0.26, 1],
     ].forEach(function(d){
-      var sa=d[0], ea=d[1], r1=d[2], y1=d[3], r2=d[4], y2=d[5], er=d[6], tw=d[7], th=d[8], mi=d[9];
+      // reach scaled ×1.45 so the root web spans the widened underworld floor
+      var sa=d[0], ea=d[1], r1=d[2], y1=d[3], r2=d[4]*1.45, y2=d[5], er=d[6]*1.45, tw=d[7], th=d[8], mi=d[9];
       var p0x=Math.cos(sa)*0.5, p0z=Math.sin(sa)*0.5;           // trunk exit
       var p1x=Math.cos(sa)*r1,  p1z=Math.sin(sa)*r1;            // first elbow (radial)
       var p2x=Math.cos(ea)*r2,  p2z=Math.sin(ea)*r2;            // second elbow (deviated angle)
@@ -686,15 +751,23 @@
 
     // ── MIDDLE WORLD — HILLFORT ──────────────────────────
     var MW = 0;
+    // wide grassy plain — the surrounding land (flat, for exploring on foot)
+    var plainR = 30;
+    var plain = new THREE.Mesh(new THREE.CircleGeometry(plainR,44), fmf(0x74ac3e));
+    plain.rotation.x=-Math.PI/2; plain.position.y=MW; plain.receiveShadow=true; scene.add(plain);
+    // fort courtyard — tan dirt disc at the centre, sitting on the plain
+    var topterra = new THREE.Mesh(new THREE.CircleGeometry(12,20), fmf(0xc49058));
+    topterra.rotation.x=-Math.PI/2; topterra.position.y=MW+0.02; scene.add(topterra);
+    var ditch = new THREE.Mesh(new THREE.RingGeometry(11.0,12.8,20), fmf(0x8a5a30));
+    ditch.rotation.x=-Math.PI/2; ditch.position.y=MW+0.01; scene.add(ditch);
+    // stepped island rim — pushed out beyond the plain
+    // (tops sit 0.06 below the plain so the solid caps never z-fight the grass)
+    var terraceLayers=[];
     [0xc49058,0xd4a468,0xe0b478,0xeac488].forEach(function(c,i){
-      var r2 = 12+i*2.2;
-      var layer = new THREE.Mesh(new THREE.CylinderGeometry(r2,r2+2,0.55,14,1), fmf(c));
-      layer.position.y = MW-0.28-i*0.45; scene.add(layer);
+      var r2 = plainR+i*2.4;
+      var layer = new THREE.Mesh(new THREE.CylinderGeometry(r2,r2+2.4,0.6,24,1), fmf(c));
+      layer.position.y = MW-0.36-i*0.55; scene.add(layer); terraceLayers.push(layer);
     });
-    var topterra = new THREE.Mesh(new THREE.CircleGeometry(12,14), fmf(0xc49058));
-    topterra.rotation.x=-Math.PI/2; topterra.position.y=MW+0.01; scene.add(topterra);
-    var ditch = new THREE.Mesh(new THREE.RingGeometry(11.0,12.8,14), fmf(0x8a5a30));
-    ditch.rotation.x=-Math.PI/2; ditch.position.y=MW-0.04; scene.add(ditch);
 
     // mound — deformed cone: convex profile + organic lumps, clean top ring for the platform
     function deformMound(geo){
@@ -929,9 +1002,9 @@
 
     // dirt path from outer edge toward gate
     var entZ=12.2;
-    for(var pi=0; pi<8; pi++){
+    for(var pi=0; pi<14; pi++){
       var pz=entZ+1.5+pi*1.1;
-      var pw=1.8+pi*0.2;
+      var pw=Math.min(1.8+pi*0.2, 3.0);
       var pathSlab=new THREE.Mesh(new THREE.BoxGeometry(pw,0.04,0.9),fmf(pi%2===0?0xb09060:0xa07c50));
       pathSlab.position.set(0, MW+0.02, pz); pathSlab.receiveShadow=true; scene.add(pathSlab);
     }
@@ -949,29 +1022,39 @@
       }
       return (lo+hi)/2;
     }
-    var stepData=[];
+    // path runs from the entrance-gate axis (0.1625) up to the hillfort-gate axis (0.491)
+    var stairA0 = 0.1625, stairA1 = 0.491;
+    var pathPts=[];
     for (var i=0; i<STEPS; i++) {
       var t2 = i/(STEPS-1);
-      var sa3 = 0.0 + t2*0.55;
+      var sa3 = stairA0 + (stairA1-stairA0)*t2;
       var sr3 = stairSurfR(t2, sa3) + 0.18; // step nose slightly proud of the slope
-      var stepY = MW + t2*4.5;
-      var stepW = 2.2 - t2*0.5;
-      stepData.push([sa3, sr3, stepY, stepW]);
-      var sx6=Math.sin(sa3)*sr3, sz6=Math.cos(sa3)*sr3;
+      pathPts.push([Math.sin(sa3)*sr3, MW + t2*4.5, Math.cos(sa3)*sr3]);
+    }
+    var stepData=[];
+    for (var i=0; i<STEPS; i++) {
+      var p6=pathPts[i];
+      var pN=pathPts[Math.min(i+1,STEPS-1)], pP=pathPts[Math.max(i-1,0)];
+      var dx6=pN[0]-pP[0], dz6=pN[2]-pP[2];
+      var dl6=Math.hypot(dx6,dz6)||1;
+      var ux6=dx6/dl6, uz6=dz6/dl6;         // uphill travel direction (horizontal)
+      var yaw6=Math.atan2(dx6,dz6);          // step depth aligned with travel
+      var stepY=p6[1], stepW=2.2-(i/(STEPS-1))*0.5;
+      stepData.push([yaw6, p6[0], stepY, p6[2], stepW]);
       var rp = new THREE.Mesh(new THREE.BoxGeometry(stepW, 0.22, 0.75), fmf(i%2===0?0x9a6a38:0x8a5a28));
-      rp.position.set(sx6, stepY, sz6);
-      rp.rotation.y = -sa3;
+      rp.position.set(p6[0], stepY, p6[2]);
+      rp.rotation.y = yaw6;
       rp.castShadow = true; scene.add(rp);
       if (i < STEPS-1) {
         var rh3 = 4.5/STEPS;
         var riser = new THREE.Mesh(new THREE.BoxGeometry(stepW, rh3, 0.18), fmf(0x7a4a20));
-        riser.position.set(sx6, stepY+rh3/2, sz6 - 0.45);
-        riser.rotation.y = -sa3; scene.add(riser);
+        riser.position.set(p6[0]+ux6*0.42, stepY+rh3/2, p6[2]+uz6*0.42);
+        riser.rotation.y = yaw6; scene.add(riser);
       }
       // support legs where the step hangs over the steep face
-      var exd6=Math.cos(sa3), ezd6=Math.sin(sa3);
+      var exd6=Math.cos(yaw6), ezd6=-Math.sin(yaw6);
       [-1,1].forEach(function(ls){
-        var lx6=sx6+ls*(stepW/2-0.18)*exd6, lz6=sz6+ls*(stepW/2-0.18)*ezd6;
+        var lx6=p6[0]+ls*(stepW/2-0.18)*exd6, lz6=p6[2]+ls*(stepW/2-0.18)*ezd6;
         var gy6=dropOnMound(lx6,lz6); if(gy6===null) gy6=MW;
         var legH=stepY-0.11-gy6;
         if(legH>0.15){
@@ -993,9 +1076,8 @@
     var railTopsL=[], railTopsR=[];
     [0,3,6,9,12,15,17].forEach(function(i){
       var sd5=stepData[i];
-      var ra4=sd5[0], rr4=sd5[1], ry4=sd5[2], rw4=sd5[3];
-      var cx4=Math.sin(ra4)*rr4, cz4=Math.cos(ra4)*rr4;
-      var exd=Math.cos(ra4), ezd=Math.sin(ra4); // step local x direction
+      var yaw5=sd5[0], cx4=sd5[1], ry4=sd5[2], cz4=sd5[3], rw4=sd5[4];
+      var exd=Math.cos(yaw5), ezd=-Math.sin(yaw5); // step local x direction
       [[-1,railTopsL],[1,railTopsR]].forEach(function(sd){
         var px4=cx4+sd[0]*(rw4/2-0.08)*exd, pz4=cz4+sd[0]*(rw4/2-0.08)*ezd;
         var post=new THREE.Mesh(new THREE.CylinderGeometry(0.045,0.055,0.85,5,1), fmf(0x6a4018));
@@ -1009,9 +1091,10 @@
       }
     });
 
-    // landing slab at the stair base
+    // landing slab at the stair base — between the entrance gate and the first step
     var landing=new THREE.Mesh(new THREE.BoxGeometry(2.8,0.16,1.3), fmf(0x9a6a38));
-    landing.position.set(0, MW+0.08, 11.9); landing.receiveShadow=true; scene.add(landing);
+    landing.position.set(1.9, MW+0.08, 11.7); landing.rotation.y=-0.1625;
+    landing.receiveShadow=true; scene.add(landing);
 
     // Longhouses — ring + center layout like the reference
     var plY = MW+4.5+0.65;
@@ -1233,15 +1316,28 @@
         rail.position.set(r[0],MW+ry,r[1]); rail.rotation.y=r[3]; penG.add(rail);
       });
     });
-    // sheep — plump white bodies with dark heads; one dark goat
-    [[-1.2,-0.5,0.4,0xf0ece0],[0.3,0.6,2.1,0xf0ece0],[1.1,-0.7,3.6,0xe8e2d2],[-0.2,-1.0,1.0,0x4a3a2c]].forEach(function(s){
-      var body=new THREE.Mesh(new THREE.SphereGeometry(0.30,7,5), fmf(s[3]));
-      body.scale.set(1.35,1.0,0.95);
-      body.position.set(s[0],MW+0.34,s[1]); body.rotation.y=s[2]; body.castShadow=true; penG.add(body);
-      var head=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.16,0.18), fmf(s[3]===0x4a3a2c?0x3a2c20:0x3a3028));
-      head.position.set(s[0]+Math.cos(s[2])*0.42, MW+0.42, s[1]-Math.sin(s[2])*0.42);
-      head.rotation.y=s[2]; penG.add(head);
+    // sheep builder — a self-contained group facing local +x, origin on the ground
+    function makeSheep(bodyCol){
+      var g=new THREE.Group();
+      var body=new THREE.Mesh(new THREE.SphereGeometry(0.30,7,5), fmf(bodyCol));
+      body.scale.set(1.35,1.0,0.95); body.position.y=0.34; body.castShadow=true; g.add(body);
+      var head=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.16,0.18), fmf(bodyCol===0x4a3a2c?0x3a2c20:0x3a3028));
+      head.position.set(0.42,0.42,0); g.add(head);
+      return {g:g, body:body, head:head, headBaseY:0.42};
+    }
+    // pen sheep — plump white bodies + one dark goat; animated idle graze
+    var penSheep=[];
+    [[-1.2,-0.5,0.4,0xf0ece0],[0.3,0.6,2.1,0xf0ece0],[1.1,-0.7,3.6,0xe8e2d2],[-0.2,-1.0,1.0,0x4a3a2c]].forEach(function(s,i){
+      var sh=makeSheep(s[3]);
+      sh.g.position.set(s[0],MW,s[1]); sh.g.rotation.y=s[2];
+      penG.add(sh.g);
+      penSheep.push({sh:sh, baseY:MW, ph:i*1.9});
     });
+    // one sheep escaped — grazes on the hillside slope just outside the fence
+    var escSheep=makeSheep(0xf0ece0);
+    scene.add(escSheep.g);
+    var escCx=-11.12, escCz=-2.93, escR=0.40; // loop centre on the flat foot ring (r~11.5) beside the pen
+    var escPrev=new THREE.Vector3(escCx+escR, MW, escCz);
 
     // firewood stacks — one by the well, one by the pen
     [[6.8,9.5,0.3],[-12.6,-1.2,1.2]].forEach(function(fw){
@@ -1253,49 +1349,57 @@
       }
     });
 
-    // ── LAKE — crescent wrapping around front-right of mound
-    function makeArcShape(innerR, outerR, startA, endA, steps) {
-      var sh = new THREE.Shape();
-      sh.moveTo(Math.cos(startA)*outerR, Math.sin(startA)*outerR);
-      for (var i=1; i<=steps; i++) {
-        var a = startA+(endA-startA)*i/steps;
-        sh.lineTo(Math.cos(a)*outerR, Math.sin(a)*outerR);
+    // ── LAKE — organic crescent, north-east side ──
+    // NOTE: rotation.x=-PI/2 negates shape Y, so the water truly spans WORLD
+    // angles wA0..wA1 (x=cos a, z=sin a). Everything below uses world angles.
+    var wA0=-2.1, wA1=0.3, lakeMid=15.2;
+    function lakeWob(a){ return Math.sin(a*3.3+0.7)*0.5 + Math.sin(a*7.1+2.4)*0.25; }
+    // organic band: wobbling edges, tapering to points at both tips
+    function makeLakeShape(rIn, rOut, steps, tPow){
+      var sh=new THREE.Shape();
+      function pt(t, rBase){
+        var a=wA0+(wA1-wA0)*t;
+        var e=Math.pow(Math.sin(Math.PI*t), tPow||0.5);
+        var r=lakeMid+(rBase-lakeMid)*e+lakeWob(a)*e;
+        return [Math.cos(a)*r, -Math.sin(a)*r]; // shape-space Y is negated
       }
-      for (var i=steps; i>=0; i--) {
-        var a = startA+(endA-startA)*i/steps;
-        sh.lineTo(Math.cos(a)*innerR, Math.sin(a)*innerR);
-      }
+      var p0=pt(0,rOut); sh.moveTo(p0[0],p0[1]);
+      for(var i=1;i<=steps;i++){ var p=pt(i/steps,rOut); sh.lineTo(p[0],p[1]); }
+      for(var i=steps;i>=0;i--){ var p2=pt(i/steps,rIn); sh.lineTo(p2[0],p2[1]); }
       sh.closePath();
       return sh;
     }
-    var arcStart = -0.3, arcEnd = 2.1, arcSteps = 28;
-    // muddy shore band
-    var shoreGeo = new THREE.ShapeGeometry(makeArcShape(11.5, 19.5, arcStart, arcEnd, arcSteps));
-    var shoreMesh = new THREE.Mesh(shoreGeo, fmf(0x8a7050));
-    shoreMesh.rotation.x=-Math.PI/2; shoreMesh.position.y=MW-0.05; scene.add(shoreMesh);
-    // sandy bank
-    var bankGeo = new THREE.ShapeGeometry(makeArcShape(12.0, 18.5, arcStart, arcEnd, arcSteps));
-    var bankMesh = new THREE.Mesh(bankGeo, fmf(0xc8aa70));
-    bankMesh.rotation.x=-Math.PI/2; bankMesh.position.y=MW-0.03; scene.add(bankMesh);
-    // water
+    // nested organic bands: muddy shore → sandy bank → water → deep centre
+    // (stacked above the plain at MW+0 — plain would otherwise cover the water)
+    var shoreMesh = new THREE.Mesh(new THREE.ShapeGeometry(makeLakeShape(11.5,19.5,48)), fmf(0x8a7050));
+    shoreMesh.rotation.x=-Math.PI/2; shoreMesh.position.y=MW+0.03; scene.add(shoreMesh);
+    var bankMesh = new THREE.Mesh(new THREE.ShapeGeometry(makeLakeShape(12.0,18.5,48)), fmf(0xc8aa70));
+    bankMesh.rotation.x=-Math.PI/2; bankMesh.position.y=MW+0.045; scene.add(bankMesh);
     var lakeMat = new THREE.MeshPhongMaterial({color:0x2a6080,emissive:0x0a2840,emissiveIntensity:0.6,flatShading:true,shininess:130,transparent:true,opacity:0.90});
-    var waterGeo = new THREE.ShapeGeometry(makeArcShape(12.8, 17.6, arcStart, arcEnd, arcSteps));
-    var lakeMesh = new THREE.Mesh(waterGeo, lakeMat);
-    lakeMesh.rotation.x=-Math.PI/2; lakeMesh.position.y=MW-0.01; scene.add(lakeMesh);
-    // subtle specular shimmer — tiny points, not polygons
+    var lakeMesh = new THREE.Mesh(new THREE.ShapeGeometry(makeLakeShape(12.8,17.6,48)), lakeMat);
+    lakeMesh.rotation.x=-Math.PI/2; lakeMesh.position.y=MW+0.06; scene.add(lakeMesh);
+    var deepMat = new THREE.MeshPhongMaterial({color:0x1c4560,emissive:0x061c30,emissiveIntensity:0.7,flatShading:true,shininess:150,transparent:true,opacity:0.85,depthWrite:false});
+    var deepMesh = new THREE.Mesh(new THREE.ShapeGeometry(makeLakeShape(13.9,16.5,48,0.9)), deepMat);
+    deepMesh.rotation.x=-Math.PI/2; deepMesh.position.y=MW+0.075; scene.add(deepMesh);
+    // subtle specular shimmer — tiny points inside the tapered water band
     var shimPts=[];
     for (var i=0; i<120; i++) {
-      var sa2=arcStart+(arcEnd-arcStart)*Math.random();
-      var sr2=13.0+Math.random()*4.2;
-      shimPts.push(Math.cos(sa2)*sr2, MW+0.02, Math.sin(sa2)*sr2);
+      var st=0.05+Math.random()*0.90;
+      var sa2=wA0+(wA1-wA0)*st;
+      var e2=Math.pow(Math.sin(Math.PI*st),0.5);
+      var sr2=lakeMid+(Math.random()*2-1)*2.0*e2+lakeWob(sa2)*e2;
+      shimPts.push(Math.cos(sa2)*sr2, MW+0.10, Math.sin(sa2)*sr2);
     }
     var shimBuf=new THREE.BufferGeometry();
     shimBuf.setAttribute('position',new THREE.Float32BufferAttribute(shimPts,3));
     scene.add(new THREE.Points(shimBuf,new THREE.PointsMaterial({color:0xaaddff,size:0.12,transparent:true,opacity:0.55,depthWrite:false})));
-    // reeds along both edges of the arc
+    // reeds hugging the true water edges
     for (var i=0; i<32; i++) {
-      var ra = arcStart+(arcEnd-arcStart)*i/32+Math.random()*0.05;
-      var edge = Math.random()<0.5 ? 12.5+Math.random()*0.6 : 17.2+Math.random()*0.6;
+      var rt=0.06+(i/32)*0.88+Math.random()*0.02;
+      var ra=wA0+(wA1-wA0)*rt;
+      var e3=Math.pow(Math.sin(Math.PI*rt),0.5);
+      var innerE=lakeMid-(lakeMid-12.8)*e3, outerE=lakeMid+(17.6-lakeMid)*e3;
+      var edge=(Math.random()<0.5 ? innerE-0.2-Math.random()*0.4 : outerE+0.2+Math.random()*0.4)+lakeWob(ra)*e3;
       var rx=Math.cos(ra)*edge, rz=Math.sin(ra)*edge;
       var rh=0.5+Math.random()*0.7;
       var reed=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.05,rh,4,1),fmf(0x5a7830));
@@ -1303,14 +1407,14 @@
       var rtip=new THREE.Mesh(new THREE.CylinderGeometry(0.055,0.04,0.24,4,1),fmf(0x3a2010));
       rtip.position.set(rx,MW+rh+0.12,rz); scene.add(rtip);
     }
-    // small dock at midpoint of arc
-    var dockA = (arcStart+arcEnd)/2;
+    // small dock at the true midpoint of the water arc
+    var dockA = (wA0+wA1)/2;
     var dockR = 12.2;
     var dockX=Math.cos(dockA)*dockR, dockZ=Math.sin(dockA)*dockR;
     for (var i=0; i<5; i++) {
       var plank=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.1,1.0),fmf(0x6a4018));
       plank.rotation.y=dockA; plank.castShadow=true;
-      plank.position.set(dockX+Math.cos(dockA)*i*0.8, MW+0.06, dockZ+Math.sin(dockA)*i*0.8);
+      plank.position.set(dockX+Math.cos(dockA)*i*0.8, MW+0.12, dockZ+Math.sin(dockA)*i*0.8);
       scene.add(plank);
     }
     [0.3,-0.3].forEach(function(side){
@@ -1349,7 +1453,7 @@
 
     // light reflecting off water
     var lakeL=new THREE.PointLight(0x1a5588,2.0,22);
-    lakeL.position.set(Math.cos((arcStart+arcEnd)/2)*15, MW+1.5, Math.sin((arcStart+arcEnd)/2)*15);
+    lakeL.position.set(Math.cos(dockA)*15, MW+1.5, Math.sin(dockA)*15);
     scene.add(lakeL);
 
     // ── LAKE CONTENTS ────────────────────────────────────
@@ -1388,11 +1492,11 @@
       var lpx=Math.cos(ld[0])*ld[1], lpz=Math.sin(ld[0])*ld[1];
       var pad=new THREE.Mesh(new THREE.CircleGeometry(0.22+Math.random()*0.10,16),
         new THREE.MeshPhongMaterial({color:0x2a5c1e,flatShading:false}));
-      pad.rotation.x=-Math.PI/2; pad.position.set(lpx,MW+0.03,lpz); scene.add(pad);
+      pad.rotation.x=-Math.PI/2; pad.position.set(lpx,MW+0.095,lpz); scene.add(pad);
       if (Math.random()>0.4) {
         var flower=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.06,0.08,8,1),
           new THREE.MeshPhongMaterial({color:0xf0d8a0,flatShading:false}));
-        flower.position.set(lpx,MW+0.07,lpz); scene.add(flower);
+        flower.position.set(lpx,MW+0.135,lpz); scene.add(flower);
       }
     });
     // reeds in N-E cluster
@@ -1406,7 +1510,7 @@
     });
 
     // heron / bird — standing at shore, one side of lake
-    var birdA = arcStart+0.25, birdR = 12.6;
+    var birdA = -0.05, birdR = 12.6;
     var bdx=Math.cos(birdA)*birdR, bdz=Math.sin(birdA)*birdR;
     // legs
     [0.08,-0.08].forEach(function(off){
@@ -1444,7 +1548,7 @@
       var sp=new THREE.Sprite(mat); sp.scale.set(3.5,3.5,1);
       return sp;
     }
-    var cR=19, cY=MW+3;
+    var cR=29.5, cY=MW+3;
     [['N',0,-cR],['S',0,cR],['E',cR,0],['W',-cR,0]].forEach(function(d){
       var sp=makeCompassSprite(d[0]);
       sp.position.set(d[1],cY,d[2]); scene.add(sp);
@@ -1490,13 +1594,122 @@
         [-14.2, -2.2, 0.48, 1],[-15.8,  1.5, 0.42, 0],[-17.0,  0.2, 0.38, 1]
       ]
     };
+    var groveOut=1.55; // push groves out toward the new island edge
     Object.keys(groves).forEach(function(dir){
       var g=groves[dir];
       g.forEach(function(d,i){
-        if(d.length===5) simpleTree(d[0],d[1],d[2],d[3],d[4]);
-        else             simpleBush(d[0],d[1],d[2],d[3]);
+        if(d.length===5) simpleTree(d[0]*groveOut,d[1]*groveOut,d[2],d[3],d[4]);
+        else             simpleBush(d[0]*groveOut,d[1]*groveOut,d[2],d[3]);
       });
     });
+
+    // ── MEADOW DRESSING — colour patches, flowers, grass, boulders, clustered trees ──
+    (function(){
+      function rr(a,b){ return a+Math.random()*(b-a); }
+      function inLake(a,r){ var la=a; while(la>Math.PI)la-=Math.PI*2; while(la<-Math.PI)la+=Math.PI*2; return (la>-2.35&&la<0.55&&r<21); }
+      var keepClear=[[-13.5,6],[13,7.5],[1.5,14.5],[-7.3,10.7],[-11.2,6.4],[-9.0,10.0],[-10.2,8.0],[7.1,-8.9]];
+      function nearLM(x,z){ for(var q=0;q<keepClear.length;q++){ var dx=x-keepClear[q][0],dz=z-keepClear[q][1]; if(dx*dx+dz*dz<5.3) return true; } return false; }
+      function onPath(x,z){ return (Math.abs(x)<2.9 && z>11); }
+      function ok(x,z){ var r=Math.hypot(x,z), a=Math.atan2(z,x); return r>12.8 && r<28.5 && !inLake(a,r) && !nearLM(x,z) && !onPath(x,z); }
+
+      // grass + dry-ground colour patches (flat, low-poly — break the flat monotone)
+      var patchGreens=[0x6aa838,0x86bc52,0x5f9c34,0x9cb24e], patchDry=[0xc2a670,0xb59a64];
+      for(var i=0;i<38;i++){
+        var a=rr(0,Math.PI*2), r=rr(13,28), x=Math.cos(a)*r, z=Math.sin(a)*r;
+        if(inLake(a,r)) continue;
+        var col=(Math.random()<0.22)? patchDry[i%2] : patchGreens[i%4];
+        var patch=new THREE.Mesh(new THREE.CircleGeometry(rr(1.4,3.3),7), fmf(col));
+        patch.rotation.x=-Math.PI/2; patch.rotation.z=Math.random()*Math.PI;
+        patch.position.set(x,MW+0.012,z); patch.receiveShadow=true; scene.add(patch);
+      }
+
+      // wildflower clusters
+      var fCols=[0xfff4e0,0xffd84a,0xb85cc8,0xd8503c,0x6f88d8];
+      for(var i=0;i<16;i++){
+        var a=rr(0,Math.PI*2), r=rr(13.5,27.5), cx=Math.cos(a)*r, cz=Math.sin(a)*r;
+        if(!ok(cx,cz)) continue;
+        var fc=fCols[Math.floor(Math.random()*fCols.length)], n=4+Math.floor(Math.random()*5);
+        for(var j=0;j<n;j++){
+          var fx=cx+rr(-0.9,0.9), fz=cz+rr(-0.9,0.9), fh=rr(0.14,0.26);
+          var stem=new THREE.Mesh(new THREE.CylinderGeometry(0.012,0.012,fh,4,1), fmf(0x4a7a28));
+          stem.position.set(fx,MW+fh/2,fz); scene.add(stem);
+          var top=new THREE.Mesh(new THREE.SphereGeometry(0.055,5,4), fmf(fc));
+          top.position.set(fx,MW+fh+0.03,fz); scene.add(top);
+        }
+      }
+
+      // tall grass tufts — surface texture
+      for(var i=0;i<36;i++){
+        var a=rr(0,Math.PI*2), r=rr(13,28), cx=Math.cos(a)*r, cz=Math.sin(a)*r;
+        if(!ok(cx,cz)) continue;
+        var gc=[0x5e9430,0x6faa38,0x4e8228][i%3], n=3+Math.floor(Math.random()*3);
+        for(var j=0;j<n;j++){
+          var bh=rr(0.4,0.85);
+          var blade=new THREE.Mesh(new THREE.ConeGeometry(0.05,bh,3,1), fmf(gc));
+          blade.position.set(cx+rr(-0.28,0.28),MW+bh/2,cz+rr(-0.28,0.28));
+          blade.rotation.set(rr(-0.18,0.18),Math.random()*Math.PI,rr(-0.18,0.18)); scene.add(blade);
+        }
+      }
+
+      // boulder clusters — landmarks
+      for(var i=0;i<6;i++){
+        var a=rr(0,Math.PI*2), r=rr(14,27), cx=Math.cos(a)*r, cz=Math.sin(a)*r;
+        if(!ok(cx,cz)) continue;
+        var n=2+Math.floor(Math.random()*3);
+        for(var j=0;j<n;j++){
+          var rs=rr(0.35,0.85);
+          var rock=new THREE.Mesh(new THREE.DodecahedronGeometry(rs,0), fmf(Math.random()<0.5?0x8a8a7e:0x76766a));
+          rock.rotation.set(Math.random(),Math.random(),Math.random()); rock.scale.y=rr(0.6,0.9);
+          rock.position.set(cx+rr(-0.7,0.7),MW+rs*0.5,cz+rr(-0.7,0.7)); rock.castShadow=true; scene.add(rock);
+        }
+      }
+
+      // trees — clustered groves + singles, conifer & deciduous variety
+      function conifer(x,z,sc){
+        var h=rr(1.4,2.2)*sc, r=rr(0.6,0.95)*sc;
+        var t=new THREE.Mesh(new THREE.CylinderGeometry(0.1,0.16,h,6,1), fmf(0x4a2e0c));
+        t.position.set(x,MW+h/2,z); t.castShadow=true; scene.add(t);
+        var cols=[0x3a6020,0x2e5018,0x4a7228];
+        for(var k=0;k<3;k++){ var cr=r*(1-k*0.26); var c=new THREE.Mesh(new THREE.ConeGeometry(cr,cr*1.5,7,1), fmf(cols[k%3])); c.position.set(x,MW+h+k*r*0.6,z); if(k===0)c.castShadow=true; scene.add(c); }
+      }
+      function deciduous(x,z,sc){
+        var h=rr(1.3,2.0)*sc, t=new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.17,h,6,1), fmf(0x5a3a18));
+        t.position.set(x,MW+h/2,z); t.castShadow=true; scene.add(t);
+        var fols=[0x4a7a2a,0x3e6a22,0x568a34], base=rr(0.8,1.15)*sc;
+        [[0,h+base*0.3,base],[base*0.5,h+base*0.12,base*0.7],[-base*0.5,h+base*0.2,base*0.72],[0,h+base*0.75,base*0.66]].forEach(function(b,bi){
+          var f=new THREE.Mesh(new THREE.SphereGeometry(b[2],6,5), fmf(fols[bi%3])); f.position.set(x+b[0],MW+b[1],z); if(bi===0)f.castShadow=true; scene.add(f);
+        });
+      }
+      function placeTree(x,z,sc){ if(Math.random()<0.6) conifer(x,z,sc); else deciduous(x,z,sc); }
+      var made=0, tries=0;
+      while(made<12 && tries<200){ tries++;
+        var a=rr(0,Math.PI*2), r=rr(14,27), cx=Math.cos(a)*r, cz=Math.sin(a)*r;
+        if(!ok(cx,cz)) continue;
+        var n=2+Math.floor(Math.random()*4);
+        for(var j=0;j<n;j++){ var tx=cx+rr(-1.6,1.6), tz=cz+rr(-1.6,1.6); if(ok(tx,tz)) placeTree(tx,tz,rr(0.85,1.25)); }
+        made++;
+      }
+      made=0; tries=0;
+      while(made<16 && tries<200){ tries++;
+        var a=rr(0,Math.PI*2), r=rr(13.5,28), x=Math.cos(a)*r, z=Math.sin(a)*r;
+        if(!ok(x,z)) continue; placeTree(x,z,rr(0.8,1.2)); made++;
+      }
+
+      // grass creeping onto the fort courtyard edge — softens the tan/green line
+      for(var i=0;i<28;i++){
+        var a=rr(0,Math.PI*2);
+        var r=rr(11.2,12.9), cx=Math.cos(a)*r, cz=Math.sin(a)*r;
+        if(inLake(a,r)) continue;
+        if(Math.abs(cx)<3 && cz>9) continue;       // leave the south gate/path clear
+        var gc=[0x5e9430,0x6faa38][i%2], n=2+Math.floor(Math.random()*3);
+        for(var j=0;j<n;j++){
+          var bh=rr(0.3,0.6);
+          var blade=new THREE.Mesh(new THREE.ConeGeometry(0.045,bh,3,1), fmf(gc));
+          blade.position.set(cx+rr(-0.3,0.3),MW+0.02+bh/2,cz+rr(-0.3,0.3));
+          blade.rotation.set(rr(-0.15,0.15),Math.random()*Math.PI,rr(-0.15,0.15)); scene.add(blade);
+        }
+      }
+    })();
 
     // ── TOTEMS — 2 tall carved posts outside the village ─
     // scale: overall height multiplier, girth: radius multiplier
@@ -1799,6 +2012,29 @@
     var raycaster = new THREE.Raycaster();
     var mouse2d = new THREE.Vector2();
 
+    // ── DISCOVERY CODEX — persistent count of lore entries read ──
+    var codexEl=document.getElementById('codex-count');
+    var discovered={};
+    try { (JSON.parse(localStorage.getItem('baltic-codex')||'[]')).forEach(function(k){ discovered[k]=1; }); } catch(err){}
+    function codexSeen(title){ return !!discovered[title]; }
+    function updateCodex(pulse){
+      var titles={}; clickables.forEach(function(c){ titles[c.userData.lore.title]=1; });
+      var total=Object.keys(titles).length, n=0;
+      Object.keys(discovered).forEach(function(k){ if(titles[k]) n++; });
+      codexEl.textContent = n+' / '+total;
+      if (pulse){
+        var box=document.getElementById('codex');
+        box.classList.add('pulse');
+        setTimeout(function(){ box.classList.remove('pulse'); }, 300);
+      }
+    }
+    function codexDiscover(title){
+      if (discovered[title]) return;
+      discovered[title]=1;
+      try { localStorage.setItem('baltic-codex', JSON.stringify(Object.keys(discovered))); } catch(err){}
+      updateCodex(true);
+    }
+
     var hoverTag = document.getElementById('hover-tag');
     rend.domElement.addEventListener('mousemove', function(e) {
       if (walkMode) { hoverTag.style.display='none'; return; }
@@ -1807,7 +2043,8 @@
       raycaster.setFromCamera(mouse2d, cam);
       var hits = raycaster.intersectObjects(clickables, false);
       if (hits.length > 0) {
-        hoverTag.textContent = hits[0].object.userData.lore.title;
+        var hLore = hits[0].object.userData.lore;
+        hoverTag.textContent = hLore.title + (codexSeen(hLore.title) ? '' : '  ·  read ▸');
         hoverTag.style.display = 'block';
         hoverTag.style.left = e.clientX + 'px';
         hoverTag.style.top  = e.clientY + 'px';
@@ -1824,27 +2061,71 @@
       mouse2d.y = -(e.clientY / H) * 2 + 1;
       raycaster.setFromCamera(mouse2d, cam);
       var hits = raycaster.intersectObjects(clickables, false);
-      if (hits.length > 0) showLore(hits[0].object.userData.lore);
+      if (hits.length > 0) {
+        var cLore = hits[0].object.userData.lore;
+        showLore(cLore);
+        codexDiscover(cLore.title);
+      }
     });
 
-    // ── WALK MODE ───────────────────────────────────────
+    // ── WALK MODE (third-person, follow camera) ──────────
     var walkMode = false;
-    var walkYaw = 0, walkPitch = 0;
-    var walkPos = new THREE.Vector3(2, MW+1.8, 19);
+    var walkPos = new THREE.Vector3(2, MW, 19);      // character feet position
+    var camYaw = Math.PI, camPitch = 0.42, camDist = 6.5; // orbit around character
+    var charYaw = Math.PI, charStep = 0, charAmp = 0;
     var keys = {};
     var walkOverlay = document.getElementById('walk-overlay');
     var crosshair   = document.getElementById('crosshair');
     var walkHint    = document.getElementById('walk-hint');
     var walkBtn     = document.getElementById('walkBtn');
     var uiEl        = document.getElementById('ui');
-    var labelEl     = document.getElementById('label');
+    var walkLabelEl = document.getElementById('label');
+
+    // walkable ground: highest surface among hill, flat top and terraces
+    var walkGround=[mound, topterra, plain].concat(terraceLayers);
+    var walkRay=new THREE.Raycaster();
+    function groundHeight(x,z){
+      walkRay.set(new THREE.Vector3(x+0.013,40,z+0.017), new THREE.Vector3(0,-1,0));
+      var hits=walkRay.intersectObjects(walkGround,false);
+      return hits.length ? hits[0].point.y : MW;
+    }
+
+    // low-poly Baltic villager, faces local +z, feet at group origin
+    function makeWalker(){
+      var g=new THREE.Group();
+      var skin=0xd8a878, tunic=0x9a4a2a, legsC=0x4a3524, hairC=0x2e1c10, beltC=0x3a2410;
+      function limb(px,py,w,h,d,col){
+        var lg=new THREE.Group(); lg.position.set(px,py,0);
+        var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d), fmf(col));
+        m.position.y=-h/2; m.castShadow=true; lg.add(m); g.add(lg); return lg;
+      }
+      var legL=limb(-0.12,0.62,0.15,0.6,0.16,legsC);
+      var legR=limb( 0.12,0.62,0.15,0.6,0.16,legsC);
+      var armL=limb(-0.27,1.16,0.11,0.5,0.12,tunic);
+      var armR=limb( 0.27,1.16,0.11,0.5,0.12,tunic);
+      var body=new THREE.Mesh(new THREE.BoxGeometry(0.44,0.66,0.28), fmf(tunic));
+      body.position.y=0.94; body.castShadow=true; g.add(body);
+      var belt=new THREE.Mesh(new THREE.BoxGeometry(0.46,0.1,0.3), fmf(beltC));
+      belt.position.y=0.72; g.add(belt);
+      var head=new THREE.Mesh(new THREE.SphereGeometry(0.17,8,6), fmf(skin));
+      head.position.y=1.42; head.castShadow=true; g.add(head);
+      var hair=new THREE.Mesh(new THREE.SphereGeometry(0.185,8,6,0,Math.PI*2,0,Math.PI*0.6), fmf(hairC));
+      hair.position.y=1.45; g.add(hair);
+      return {g:g, legL:legL, legR:legR, armL:armL, armR:armR, body:body};
+    }
+    var walkChar = makeWalker();
+    walkChar.g.visible=false; scene.add(walkChar.g);
 
     window.enterWalk = function() {
       goMiddle();
       setTimeout(function(){
-        // start at south path entrance, facing north toward the gate
-        walkPos.set(2, MW+1.8, 19);
-        walkYaw = Math.PI; walkPitch = 0;
+        // start at south path entrance, character facing north toward the gate
+        walkPos.set(2, MW, 19);
+        charYaw = Math.PI; camYaw = Math.PI; camPitch = 0.42; charStep = 0; charAmp = 0;
+        var gY = groundHeight(2, 19);
+        walkChar.g.position.set(2, gY, 19);
+        walkChar.g.rotation.y = charYaw;
+        walkChar.g.visible = true;
         walkOverlay.classList.add('visible');
       }, 700);
     };
@@ -1856,7 +2137,6 @@
     function startWalk() {
       walkMode = true;
       walkOverlay.classList.remove('visible');
-      crosshair.classList.add('visible');
       walkHint.classList.add('visible');
       walkBtn.textContent = 'Exit walk';
       walkBtn.onclick = exitWalk;
@@ -1873,6 +2153,7 @@
       walkBtn.onclick = enterWalk;
       uiEl.style.opacity = '1';
       labelEl.style.display = '';
+      walkChar.g.visible = false;
       goMiddle();
     };
 
@@ -1891,41 +2172,109 @@
 
     window.addEventListener('mousemove', function(e){
       if (!walkMode) return;
-      walkYaw   -= e.movementX * 0.002;
-      walkPitch  = Math.max(-0.9, Math.min(0.9, walkPitch - e.movementY*0.002));
+      camYaw   -= e.movementX * 0.003;
+      camPitch  = Math.max(0.05, Math.min(1.2, camPitch + e.movementY*0.003));
     });
+    // scroll adjusts follow distance while in walk mode
+    rend.domElement.addEventListener('wheel', function(e){
+      if (!walkMode) return;
+      camDist = Math.max(3.5, Math.min(11, camDist + (e.deltaY>0?0.6:-0.6)));
+    }, {passive:true});
 
     function updateWalk() {
       if (!walkMode) return;
-      var speed = 0.06;
-      var dir = new THREE.Vector3(Math.sin(walkYaw), 0, Math.cos(walkYaw));
-      var right = new THREE.Vector3(Math.cos(walkYaw), 0, -Math.sin(walkYaw));
-      if (keys['KeyW']||keys['ArrowUp'])    walkPos.addScaledVector(dir,   speed);
-      if (keys['KeyS']||keys['ArrowDown'])  walkPos.addScaledVector(dir,  -speed);
-      if (keys['KeyA']||keys['ArrowLeft'])  walkPos.addScaledVector(right, -speed);
-      if (keys['KeyD']||keys['ArrowRight']) walkPos.addScaledVector(right,  speed);
-      // clamp to island boundary
-      var flatDist = Math.sqrt(walkPos.x*walkPos.x + walkPos.z*walkPos.z);
-      if (flatDist > 15) { walkPos.x *= 15/flatDist; walkPos.z *= 15/flatDist; flatDist = 15; }
-
-      // ground height follows mound cone: base r=9 y=0, top r=6 y=4.5, plateau inside r=6
-      // follow the real deformed hill surface; flat ground outside it
-      var gY = dropOnMound(walkPos.x, walkPos.z);
-      var groundY = (gY === null) ? MW : gY;
-      walkPos.y = groundY + 0.5;
-      cam.position.copy(walkPos);
-      var lookAt = new THREE.Vector3(
-        walkPos.x + Math.sin(walkYaw)*Math.cos(walkPitch),
-        walkPos.y + Math.sin(walkPitch),
-        walkPos.z + Math.cos(walkYaw)*Math.cos(walkPitch)
+      var speed = 0.075;
+      // camera-relative movement basis
+      var fwd = new THREE.Vector3(Math.sin(camYaw), 0, Math.cos(camYaw));
+      var right = new THREE.Vector3(Math.cos(camYaw), 0, -Math.sin(camYaw));
+      var mv = new THREE.Vector3();
+      if (keys['KeyW']||keys['ArrowUp'])    mv.add(fwd);
+      if (keys['KeyS']||keys['ArrowDown'])  mv.sub(fwd);
+      if (keys['KeyD']||keys['ArrowRight']) mv.add(right);
+      if (keys['KeyA']||keys['ArrowLeft'])  mv.sub(right);
+      var moving = mv.lengthSq() > 1e-4;
+      if (moving) {
+        mv.normalize();
+        walkPos.x += mv.x*speed; walkPos.z += mv.z*speed;
+        // turn character to face travel (shortest angle)
+        var tgt = Math.atan2(mv.x, mv.z);
+        var dy = tgt - charYaw; while(dy>Math.PI)dy-=Math.PI*2; while(dy<-Math.PI)dy+=Math.PI*2;
+        charYaw += dy*0.22;
+        charStep += speed*8.5;
+      }
+      charAmp += ((moving?1:0) - charAmp)*0.18; // ease the limb swing in/out
+      // keep on the island
+      var fd = Math.hypot(walkPos.x, walkPos.z);
+      if (fd > 29) { walkPos.x *= 29/fd; walkPos.z *= 29/fd; }
+      // stand on the real ground surface
+      var groundY = groundHeight(walkPos.x, walkPos.z);
+      walkPos.y = groundY;
+      walkChar.g.position.set(walkPos.x, groundY, walkPos.z);
+      walkChar.g.rotation.y = charYaw;
+      // walk-cycle limbs
+      var sw = Math.sin(charStep), amp = charAmp*0.7;
+      walkChar.legL.rotation.x =  sw*amp; walkChar.legR.rotation.x = -sw*amp;
+      walkChar.armL.rotation.x = -sw*amp; walkChar.armR.rotation.x =  sw*amp;
+      walkChar.body.position.y = 0.94 + Math.abs(Math.cos(charStep))*0.03*charAmp;
+      // follow camera orbiting behind the character
+      var hd = camDist*Math.cos(camPitch);
+      cam.position.set(
+        walkPos.x - Math.sin(camYaw)*hd,
+        groundY + 1.35 + camDist*Math.sin(camPitch),
+        walkPos.z - Math.cos(camYaw)*hd
       );
-      cam.lookAt(lookAt);
+      cam.lookAt(walkPos.x, groundY+1.15, walkPos.z);
     }
+
+    // ── GLB / glTF EXPORT (for Blender) ──────────────────
+    // window.exportWorld('middle'|'all', binary?)  — press E for middle world
+    function dlBlob(data, filename, mime){
+      var blob=new Blob([data],{type:mime}), url=URL.createObjectURL(blob);
+      var a=document.createElement('a'); a.href=url; a.download=filename; a.click();
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 1500);
+    }
+    window.exportWorld = function(which, binary){
+      which = which || 'middle';
+      binary = (binary !== false);
+      if (typeof THREE.GLTFExporter === 'undefined'){ console.error('GLTFExporter not loaded'); return; }
+      var exporter = new THREE.GLTFExporter();
+      var target, temp=null, moved=[];
+      if (which === 'all'){
+        target = scene;
+      } else {
+        // gather top-level scene children whose bbox centre sits in the middle band
+        temp = new THREE.Group();
+        var box=new THREE.Box3(), c=new THREE.Vector3();
+        scene.children.slice().forEach(function(ch){
+          if (!ch.isObject3D || ch.isLight || ch.isCamera || ch===temp) return;
+          box.setFromObject(ch);
+          if (!isFinite(box.min.y)) return;
+          box.getCenter(c);
+          if (c.y > -2.5 && c.y < 10) moved.push(ch);
+        });
+        // reparent (scene & temp are both at origin → world transforms preserved)
+        moved.forEach(function(ch){ temp.add(ch); });
+        scene.add(temp);
+        target = temp;
+      }
+      exporter.parse(target, function(result){
+        if (temp){ moved.forEach(function(ch){ scene.add(ch); }); scene.remove(temp); }
+        if (binary) dlBlob(result, 'baltic-'+which+'.glb', 'model/gltf-binary');
+        else        dlBlob(JSON.stringify(result), 'baltic-'+which+'.gltf', 'application/json');
+        console.log('Exported '+which+' world → baltic-'+which+(binary?'.glb':'.gltf'));
+      }, { binary: binary, onlyVisible: true });
+    };
+    window.addEventListener('keydown', function(e){
+      if (e.key==='e' || e.key==='E'){ if (!walkMode) window.exportWorld('middle'); }
+    });
 
     // ── ORBIT CONTROLS ──────────────────────────────────
     var drag=false, px=0, py=0;
+    var labelEl=document.getElementById('label');
+    setTimeout(function(){ labelEl.classList.add('fade'); }, 12000); // fade if idle
     rend.domElement.addEventListener('mousedown', function(e){
       if (walkMode) return;
+      labelEl.classList.add('fade');
       drag=true; px=e.clientX; py=e.clientY;
     });
     window.addEventListener('mouseup', function(){ drag=false; });
@@ -1952,10 +2301,28 @@
       tTh=th; tPh=ph; lastTouch=t2; updCam();
     }, {passive:false});
 
+    // sky-world objects (canopy, branches, clouds, celestial bodies) must not
+    // cast shadows down onto the middle world — the realms share one sun.
+    // Use the geometry's world bounding-box centre, since curve-built meshes
+    // (TubeGeometry branches) keep their geometry aloft while the mesh sits at origin.
+    scene.updateMatrixWorld(true);
+    (function(){
+      var c=new THREE.Vector3();
+      scene.traverse(function(o){
+        if(o.isMesh && o.castShadow && o.geometry){
+          if(!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+          o.geometry.boundingBox.getCenter(c); o.localToWorld(c);
+          if(c.y > 14) o.castShadow=false;
+        }
+      });
+    })();
+
     // ── LOOP ────────────────────────────────────────────
+    updateCodex(false); // initial count once every lore object is registered
     var t = 0;
     (function loop(){
       requestAnimationFrame(loop); t+=0.008;
+      updateDayNight();
       if (walkMode) {
         updateWalk();
       } else {
@@ -2011,6 +2378,26 @@
           wp.z0+Math.cos(t*0.6+wp.ph)*0.4);
         wp.s.material.opacity=Math.sin(wLife*Math.PI)*0.55;
       }
+      // pen sheep — gentle breathing bob + slow grazing head dip
+      for(var pi2=0;pi2<penSheep.length;pi2++){
+        var ps=penSheep[pi2];
+        ps.sh.g.position.y=ps.baseY+Math.sin(t*2.2+ps.ph)*0.015;
+        var graze=Math.max(0, Math.sin(t*0.35+ps.ph));
+        ps.sh.head.position.y=ps.sh.headBaseY-graze*0.14;
+        ps.sh.head.rotation.z=-graze*0.5;
+      }
+      // escaped sheep — wanders a wobbling loop on the flat ring, faces travel
+      var ea=t*0.28;
+      var ex7=escCx+Math.cos(ea)*escR+Math.sin(ea*2.3)*0.12;
+      var ez7=escCz+Math.sin(ea)*escR+Math.cos(ea*1.7)*0.12;
+      var edx7=ex7-escPrev.x, edz7=ez7-escPrev.z;
+      if(edx7*edx7+edz7*edz7>1e-6) escSheep.g.rotation.y=Math.atan2(-edz7, edx7);
+      var egy7=dropOnMound(ex7,ez7); if(egy7===null) egy7=MW; // follow the hill surface
+      escSheep.g.position.set(ex7, egy7+Math.abs(Math.sin(t*6))*0.03, ez7);
+      escPrev.set(ex7, MW, ez7);
+      var egraze=Math.max(0, Math.sin(t*0.8+1.1));
+      escSheep.head.position.y=escSheep.headBaseY-egraze*0.12;
+      escSheep.head.rotation.z=-egraze*0.45;
       // ferry of souls — slow circle on the dark pool, gentle bob
       var fa2=t*0.06;
       ferryG.position.set(Math.cos(fa2)*3.8, UW+0.10+0.04*Math.sin(t*1.1), Math.sin(fa2)*3.8);
@@ -2052,6 +2439,51 @@
     <label>Rot <input type="range" id="ge-r" min="-1.6" max="1.6" step="0.01" value="-0.49"> <span class="val" id="ge-rv">-0.49</span></label>
     <button id="ge-copy">Copy values to console</button>
   </details>
+
+  <style>
+    #clock {
+      position:fixed; top:14px; right:16px; z-index:150;
+      background:rgba(255,255,255,0.16); border:1px solid rgba(255,255,255,0.35);
+      border-radius:20px; padding:6px 14px; color:#fff;
+      font:15px/1.4 monospace; letter-spacing:.06em; user-select:none;
+      backdrop-filter:blur(8px); cursor:pointer;
+    }
+    #time-panel {
+      position:fixed; top:52px; right:16px; z-index:150;
+      background:rgba(255,255,255,0.16); border:1px solid rgba(255,255,255,0.35);
+      border-radius:14px; padding:10px 14px; color:#fff; font:13px/1.7 monospace;
+      min-width:210px; user-select:none; display:none; backdrop-filter:blur(8px);
+    }
+    #time-panel label { display:flex; justify-content:space-between; align-items:center; gap:8px; margin:3px 0; }
+    #time-panel input[type=range] { width:130px; accent-color:#fff; }
+  </style>
+  <div id="clock">🕒 <span id="clock-time">--:--</span></div>
+  <div id="time-panel">
+    <label><input type="checkbox" id="tp-real" checked> real time</label>
+    <label>time <input type="range" id="tp-min" min="0" max="1439" step="5" value="720" disabled> <span id="tp-minv">12:00</span></label>
+  </div>
+
+  <script>
+  (function(){
+    var clockEl=document.getElementById('clock-time');
+    if (window._bindClock) window._bindClock(clockEl);
+    var panel=document.getElementById('time-panel');
+    document.getElementById('clock').addEventListener('click', function(){
+      panel.style.display = panel.style.display==='block' ? 'none' : 'block';
+    });
+    var realCb=document.getElementById('tp-real');
+    var slider=document.getElementById('tp-min');
+    var sliderVal=document.getElementById('tp-minv');
+    function fmt(m){ var h=Math.floor(m/60), mm=m%60; return (h<10?'0':'')+h+':'+(mm<10?'0':'')+mm; }
+    function apply(){
+      if (realCb.checked){ slider.disabled=true; window._setTimeOverride(null); }
+      else { slider.disabled=false; window._setTimeOverride(+slider.value); }
+      sliderVal.textContent=fmt(+slider.value);
+    }
+    realCb.addEventListener('change', apply);
+    slider.addEventListener('input', apply);
+  })();
+  </script>
 
   <script>
   (function(){
